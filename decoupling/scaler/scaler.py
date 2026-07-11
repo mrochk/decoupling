@@ -3,8 +3,8 @@ from beartype import beartype
 from beartype.typing import Callable, Tuple, Optional
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
-from untangle.utils import get_random_key
-from untangle._common import find_number_inputs
+from decoupling.utils import get_random_key
+from decoupling._common import find_number_inputs
 
 class JacobianScaler:
     '''

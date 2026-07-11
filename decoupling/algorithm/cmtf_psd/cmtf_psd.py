@@ -4,10 +4,10 @@ from beartype.typing import Tuple, Optional
 from beartype import beartype
 import warnings
 
-from untangle._common import *
-from untangle import _ops as ops 
-from untangle.result import Decoupling
-from untangle.algorithm._cmtf import _CMTFWithProjection
+from decoupling._common import *
+from decoupling import _ops as ops 
+from decoupling.result import Decoupling
+from decoupling.algorithm._cmtf import _CMTFWithProjection
 
 class CMTF_PSpline(_CMTFWithProjection):
 

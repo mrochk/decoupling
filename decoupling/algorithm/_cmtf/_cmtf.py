@@ -5,10 +5,10 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import jaxtyped, Float, ArrayLike
 
-from untangle import _ops as ops
-from untangle.utils import cpd_error
-from untangle.algorithm._base import _Base
-from untangle._common import dtype_factors
+from decoupling import _ops as ops
+from decoupling.utils import cpd_error
+from decoupling.algorithm._base import _Base
+from decoupling._common import dtype_factors
 
 class _CMTFWithProjection(_Base):
 

@@ -3,8 +3,8 @@ from jaxtyping import jaxtyped, Array, ArrayLike, Float
 from beartype import beartype
 from beartype.typing import Tuple, Optional
 
-from untangle._common import as_float_array, get_random_key, dtype_factors
-from untangle.result import Decoupling
+from decoupling._common import as_float_array, get_random_key, dtype_factors
+from decoupling.result import Decoupling
 
 class _Base:
     '''Base class for all tensor decoupling algorithms.'''

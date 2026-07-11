@@ -1,17 +1,19 @@
 ![Logo](logo.png)
 
-# Untangle
+# Decoupling
 
-Fast tensor decoupling in Jax. Collection of algorithms for decoupling multivariate functions using tensor decompositions.
+Fast tensor decoupling in Jax.
+
+This library is a collection of algorithms for decoupling multivariate functions using tensor decompositions.
 
 ```python
-from untangle.algorithm import BasicDecoupling
-from untangle.utils import collect_information, function_error
+from decoupling.algorithm import BasicDecoupling
+from decoupling.utils import collect_information, function_error
 
 def target(x): # define a simple polynomial
     return jnp.array([x[0]**3 + x[1]**2 + x[0]*b, x[1]**3 + x[0]**2 + x[0]*b])
 
-rank, N = 4, 30 # rank and numeber of samples
+rank, N = 4, 30 # rank and number of samples
 info = collect_information(target, N, key) # collect outputs and jacobians
 
 decoupling = BasicDecoupling(rank, key=key).run(*info) # compute decoupling
@@ -22,14 +24,14 @@ This project was built using `uv` (https://docs.astral.sh/uv).
 
 ### Installation
 
-You can easily get `untangle` from PyPI:
+You can easily get `decoupling` from PyPI:
 ```bash
-pip install decoupling # ("untangle" was already taken...)
+pip install decoupling
 ```
 Otherwise, for a local installation:
 ```bash
-git clone git@github.com:mrochk/untangle.git
-pip install untangle
+git clone git@github.com:mrochk/decoupling.git
+pip install decoupling
 ```
 
 ### Methodology
@@ -50,10 +52,10 @@ The other important aspect is that it should be easy to design and add new algor
 
 ### Algorithms Implemented
 
-- Polynomial Tensor Decoupling `untangle/algorithm/basic` [Dreesen, Ishteva & Schoukens (2015)]
-- Constrained Polynomial TD `untangle/algorithm/ctd_polynomial` [Hollander, (2017)]
-- CMTF B-Spline Decoupling `untangle/algorithm/cmtf_bspline` [De Jonghe & Ishteva (2025)]
-- CMTF P-Spline Decoupling `untangle/algorithm/cmtf_pspline`
+- Polynomial Tensor Decoupling `decoupling/algorithm/basic` [Dreesen, Ishteva & Schoukens (2015)]
+- Constrained Polynomial TD `decoupling/algorithm/ctd_polynomial` [Hollander, (2017)]
+- CMTF B-Spline Decoupling `decoupling/algorithm/cmtf_bspline` [De Jonghe & Ishteva (2025)]
+- CMTF P-Spline Decoupling `decoupling/algorithm/cmtf_pspline`
 
 ### Testing
 

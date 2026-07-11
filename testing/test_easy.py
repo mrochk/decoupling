@@ -1,8 +1,8 @@
 import jax, jax.numpy as jnp
 import unittest
 
-from untangle.utils import collect_information, function_error
-from untangle.algorithm import BasicDecoupling, CTD_Polynomial, CMTF_BSpline, CMTF_PSpline
+from decoupling.utils import collect_information, function_error
+from decoupling.algorithm import BasicDecoupling, CTD_Polynomial, CMTF_BSpline, CMTF_PSpline
 
 def target(x):
     a, b = x

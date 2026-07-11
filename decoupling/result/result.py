@@ -2,7 +2,7 @@ from jaxtyping import jaxtyped, ArrayLike, Float
 from beartype.typing import Callable
 from beartype import beartype
 
-from untangle._common import dtype_factors
+from decoupling._common import dtype_factors
 
 class Decoupling:
 

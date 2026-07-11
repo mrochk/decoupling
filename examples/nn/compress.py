@@ -6,9 +6,9 @@ import jax, jax.numpy as jnp, optax
 from torch.utils.data import DataLoader
 from optax.losses import softmax_cross_entropy_with_integer_labels as celoss
 
-from untangle.utils import collect_information, function_error
-from untangle.scaler import JacobianScaler
-from untangle import algorithm
+from decoupling.utils import collect_information, function_error
+from decoupling.scaler import JacobianScaler
+from decoupling import algorithm
 
 def forward(nn, x):
     for weights, bias in nn[:-1]:
@@ -41,7 +41,7 @@ def collate(batch):
 
 batch_size = 128
 
-from untangle._common import default_dof
+from decoupling._common import default_dof
 
 def kd_loss_single(teacher_logits, student_logits, temperature):
     """KL( teacher || student ) for a single example."""

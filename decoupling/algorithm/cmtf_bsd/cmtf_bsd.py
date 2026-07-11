@@ -4,10 +4,10 @@ from jaxtyping import jaxtyped, Float, Array
 from beartype import beartype
 from beartype.typing import Tuple, Optional
 
-from untangle.algorithm._cmtf import _CMTFWithProjection
-from untangle.result import Decoupling
-from untangle import _ops as ops
-from untangle import _common as c
+from decoupling.algorithm._cmtf import _CMTFWithProjection
+from decoupling.result import Decoupling
+from decoupling import _ops as ops
+from decoupling import _common as c
 
 class CMTF_BSpline(_CMTFWithProjection):
 

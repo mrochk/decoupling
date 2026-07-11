@@ -15,16 +15,16 @@ dependencies = [
 authors = [{ name = "Maxime Rochkoulets", email = "mrochkoulets@gmail.com" }]
 
 [project.urls]
-Homepage = "https://github.com/mrochk/untangle"
-Repository = "https://github.com/mrochk/untangle"
-Issues = "https://github.com/mrochk/untangle/issues"
+Homepage = "https://github.com/mrochk/decoupling"
+Repository = "https://github.com/mrochk/decoupling"
+Issues = "https://github.com/mrochk/decoupling/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["untangle*"]
+include = ["decoupling*"]
 
 [tool.uv.workspace]
 members = ["."]
 
 [tool.uv.sources]
-untangle = { workspace = true }
+decoupling = { workspace = true }
