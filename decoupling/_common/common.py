@@ -8,7 +8,7 @@ from jaxtyping import jaxtyped, Array, Float, ArrayLike, Num
 from beartype import beartype 
 from beartype.typing import Callable, Union, Tuple
 
-from untangle import _ops as ops
+from decoupling import _ops as ops
 
 def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
     def log(*args):

@@ -4,8 +4,8 @@ from jaxtyping import jaxtyped, Float, Array, ArrayLike
 from beartype.typing import Callable, Tuple, Optional
 from beartype import beartype
 
-from untangle._common import get_random_key, find_number_inputs
-from untangle import _ops as ops
+from decoupling._common import get_random_key, find_number_inputs
+from decoupling import _ops as ops
 
 @jaxtyped(typechecker=beartype)
 def collect_information(

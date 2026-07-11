@@ -1,6 +1,6 @@
 # Examples
 
-Here you will find some simple notebooks and Python scripts to showcase what you can do with Untangle.
+Here you will find some simple notebooks and Python scripts to showcase what you can do with this package.
 
 If you can't visualize the notebooks on GitHub, use https://nbviewer.org.
 

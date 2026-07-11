@@ -7,12 +7,12 @@ from jaxtyping import jaxtyped, Array, Float, ArrayLike
 from beartype import beartype 
 from beartype.typing import Tuple, Optional 
 
-from untangle.utils import get_random_key, cpd_error
-from untangle import _ops as ops
-from untangle._common import solve_cpd_subproblem
-from untangle.result import Decoupling
-from untangle._common import make_polynomials
-from untangle.algorithm._base import _Base
+from decoupling.utils import get_random_key, cpd_error
+from decoupling import _ops as ops
+from decoupling._common import solve_cpd_subproblem
+from decoupling.result import Decoupling
+from decoupling._common import make_polynomials
+from decoupling.algorithm._base import _Base
 
 class CTD_Polynomial(_Base):
 

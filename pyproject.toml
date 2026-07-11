@@ -21,10 +21,10 @@ Issues = "https://github.com/mrochk/untangle/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["untangle*"]
+include = ["decoupling*"]
 
 [tool.uv.workspace]
 members = ["."]
 
 [tool.uv.sources]
-untangle = { workspace = true }
+decoupling = { workspace = true }
