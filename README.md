@@ -2,7 +2,9 @@
 
 # Decoupling
 
-Fast tensor decoupling in Jax. Collection of algorithms for decoupling multivariate functions using tensor decompositions.
+Fast tensor decoupling in Jax.
+
+This library is a collection of algorithms for decoupling multivariate functions using tensor decompositions.
 
 ```python
 from decoupling.algorithm import BasicDecoupling
@@ -11,7 +13,7 @@ from decoupling.utils import collect_information, function_error
 def target(x): # define a simple polynomial
     return jnp.array([x[0]**3 + x[1]**2 + x[0]*b, x[1]**3 + x[0]**2 + x[0]*b])
 
-rank, N = 4, 30 # rank and numeber of samples
+rank, N = 4, 30 # rank and number of samples
 info = collect_information(target, N, key) # collect outputs and jacobians
 
 decoupling = BasicDecoupling(rank, key=key).run(*info) # compute decoupling
