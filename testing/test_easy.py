@@ -34,12 +34,10 @@ class TestEasy(unittest.TestCase):
         algo = CMTF_BSpline(rank=self.rank, key=self.key)
         decoupling = algo.run(self.X, self.Y, self.J)
         errors = function_error(target, decoupling, self.X, self.key)
-        print(errors)
         self.assertTrue(all(jnp.array(errors) < 10.0))
 
     def test_cmtf_psd(self):
         algo = CMTF_PSpline(rank=self.rank, key=self.key)
         decoupling = algo.run(self.X, self.Y, self.J)
         errors = function_error(target, decoupling, self.X, self.key)
-        print(errors)
         self.assertTrue(all(jnp.array(errors) < 10.0))

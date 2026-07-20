@@ -7,9 +7,9 @@ from beartype.typing import Optional, Tuple
 from jaxtyping import jaxtyped, Array, Float, ArrayLike
 
 from decoupling.utils import cpd_error
-from decoupling.result import Decoupling
+from decoupling.result import DecouplingWithPolynomialInternals
 from decoupling.algorithm._base import _Base
-from decoupling._common import make_polynomials, solve_cpd_subproblem, cpd_stopping_criterion
+from decoupling._common import solve_cpd_subproblem, cpd_stopping_criterion
 from decoupling._ops import vandermonde_diag, block_diag, lstsq, unfold_kolda, normalize_columns_simple
 
 class BasicDecoupling(_Base):
@@ -39,7 +39,7 @@ class BasicDecoupling(_Base):
         inputs: Float[ArrayLike, 'N m'],
         outputs: Float[ArrayLike, 'N n'],
         jacobians: Float[ArrayLike, 'n m N'],
-    ) -> Decoupling:
+    ) -> DecouplingWithPolynomialInternals:
 
         inputs, outputs, jacobians = self._toarrays(inputs, outputs, jacobians)
 
@@ -60,7 +60,7 @@ class BasicDecoupling(_Base):
         W = W * weights
 
         coefs = self._find_coefs(inputs, outputs, W, V)
-        return Decoupling((W, V, H), make_polynomials(coefs))
+        return DecouplingWithPolynomialInternals((W, V, H), coefs, self.degree)
 
     @jaxtyped(typechecker=beartype)
     def _cpd(self, jacobians: Float[Array, 'n m N'], key: Array) -> Tuple[

@@ -1,21 +1,13 @@
 import random
 import jax, jax.numpy as jnp
 from functools import partial
-from scipy.interpolate import make_smoothing_spline
-from bsplx import design_matrix, design_dmatrix, bspline_inference
+from bsplx import design_matrix, design_dmatrix
 
-from jaxtyping import jaxtyped, Array, Float, ArrayLike, Num
+from jaxtyping import jaxtyped, Array, Float, ArrayLike
 from beartype import beartype 
 from beartype.typing import Callable, Union, Tuple
 
 from decoupling import _ops as ops
-
-def make_log(verbose: int, prefix: str = '') -> Callable[[], None]:
-    def log(*args):
-        if verbose <= 0: return
-        print(prefix, end=' ' if prefix else '')
-        print(*args, flush=True)
-    return log
 
 def get_random_key() -> Array:
     return jax.random.key(random.randint(0, int(1e10)))
@@ -70,34 +62,11 @@ def bspline_project(i, coefs, B, dB, H, R):
     R = R.at[:, i].set(B @ coefs)
     return (H, R)
 
-def make_polynomial(coefs: Float[Array, 'd']) -> Callable:
-    return partial(jnp.polyval, p=jnp.flip(coefs))
-
-def make_polynomials(coefs: Float[Array, 'n d']) -> Callable:
-    polynomials = [make_polynomial(c) for c in coefs]
-    return (lambda x: jnp.array([f(x=xi) for f, xi in zip(polynomials, x)]))
-
-def make_internals(internals):
-    idx = jnp.arange(len(internals))
-    def apply(u):
-        return jax.vmap(lambda i, ui: jax.lax.switch(i, internals, ui))(idx, u)
-    return apply
-
 def fit_internal_with_best_coefs(coefs, knots, degree):
     def g(x):
         B = get_design_matrix(jnp.atleast_1d(x), knots, degree)
         return jnp.squeeze(B @ coefs)
     return g
-
-def apply_internals(z, coefs, knots, degree):
-    coefs_stacked = jnp.stack(coefs)
-    knots_stacked = jnp.stack(knots)
-    
-    def single_internal(zi, c, k):
-        B = get_design_matrix(jnp.atleast_1d(zi), k, degree)
-        return (B @ c).squeeze()
-    
-    return jax.vmap(single_internal)(z, coefs_stacked, knots_stacked)
 
 def fit_internals_with_best_coefs(coefs_list, knots_list, degree):
     internals = []
@@ -106,35 +75,6 @@ def fit_internals_with_best_coefs(coefs_list, knots_list, degree):
             internals.append(lambda x: jnp.zeros_like(x))
             continue
         internals.append(fit_internal_with_best_coefs(coefs, knots, degree))
-    return internals
-
-def fit_internal_with_smoothing_spline(z_s, h_s, r_s):
-    try: dss = make_smoothing_spline(z_s, h_s)
-    except:
-        def g(x): return jnp.zeros_like(x)
-        return g
-        
-    ss = dss.antiderivative()
-    bias = jnp.median(r_s - ss(z_s))
-    knots = jnp.array(ss.t)
-    c = jnp.array(ss.c)
-    d = ss.k
-
-    n_basis = len(knots) - d - 1
-    c = c[:n_basis]
-
-    def g(x): return bspline_inference(x, c, knots, d) + bias
-    return g
-
-def fit_internals_with_smoothing_spline(Z, H, R):
-    internals = []
-    for rank in range(Z.shape[1]):
-        z, h, r = Z[:, rank], H[:, rank], R[:, rank]
-        idx = jnp.argsort(z)
-        z_s, h_s, r_s = z[idx], h[idx], r[idx]
-        g = fit_internal_with_smoothing_spline(z_s, h_s, r_s)
-        internals.append(g)
-
     return internals
 
 def get_design_matrix(z, knots: Array, degree: int):

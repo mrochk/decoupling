@@ -10,8 +10,7 @@ from beartype.typing import Tuple, Optional
 from decoupling.utils import get_random_key, cpd_error
 from decoupling import _ops as ops
 from decoupling._common import solve_cpd_subproblem
-from decoupling.result import Decoupling
-from decoupling._common import make_polynomials
+from decoupling.result import DecouplingWithPolynomialInternals
 from decoupling.algorithm._base import _Base
 
 class CTD_Polynomial(_Base):
@@ -39,7 +38,7 @@ class CTD_Polynomial(_Base):
         inputs: Float[ArrayLike, 'N m'],
         outputs: Float[ArrayLike, 'N n'],
         jacobians: Float[ArrayLike, 'n m N'],
-    ) -> Decoupling:
+    ) -> DecouplingWithPolynomialInternals:
 
         inputs, outputs, jacobians = self._toarrays(inputs, outputs, jacobians)
 
@@ -59,7 +58,7 @@ class CTD_Polynomial(_Base):
         (W, V, _) = factors
 
         coefs = self._integrate(dcoefs, inputs @ V, outputs, W)
-        return Decoupling(factors, make_polynomials(coefs))
+        return DecouplingWithPolynomialInternals(factors, coefs, self.degree)
 
     @jaxtyped(typechecker=beartype)
     def _cpd_polynomial_constraint(

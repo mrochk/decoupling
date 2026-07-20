@@ -4,7 +4,7 @@ from beartype import beartype
 from beartype.typing import Tuple, Optional
 
 from decoupling._common import as_float_array, get_random_key, dtype_factors
-from decoupling.result import Decoupling
+from decoupling.result.result import _Decoupling
 
 class _Base:
     '''Base class for all tensor decoupling algorithms.'''
@@ -42,7 +42,7 @@ class _Base:
         inputs: Float[ArrayLike, 'N m'],
         outputs: Float[ArrayLike, 'N n'],
         jacobians: Float[ArrayLike, 'n m N'],
-    ) -> Decoupling: pass
+    ) -> _Decoupling: pass
 
     @jaxtyped(typechecker=beartype)
     def _initialize_factors(self, jacobians: Float[Array, 'n m N'], key: Array, with_R: bool = False) -> dtype_factors:

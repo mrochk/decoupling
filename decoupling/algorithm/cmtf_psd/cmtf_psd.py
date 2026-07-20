@@ -6,7 +6,7 @@ import warnings
 
 from decoupling._common import *
 from decoupling import _ops as ops 
-from decoupling.result import Decoupling
+from decoupling.result import DecouplingWithSplineInternals
 from decoupling.algorithm._cmtf import _CMTFWithProjection
 
 class CMTF_PSpline(_CMTFWithProjection):
@@ -40,8 +40,7 @@ class CMTF_PSpline(_CMTFWithProjection):
     def run(self, inputs, outputs, jacobians):
         if self.dof is None: self.dof = default_dof(inputs.shape[0]) 
         factors, (coefs, knots) = self._run(inputs, outputs, jacobians)
-        def internals(z): return apply_internals(z, coefs, knots, self.degree)
-        return Decoupling(factors, internals)
+        return DecouplingWithSplineInternals(factors, coefs, knots, self.degree)
 
     def _projection(
         self,
