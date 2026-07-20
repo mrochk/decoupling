@@ -1,1 +1,5 @@
-from .result import DecouplingWithSplineInternals, DecouplingWithPolynomialInternals
+from .result import (
+    DecouplingWithSplineInternals, 
+    DecouplingWithPolynomialInternals,
+    DecouplingWithSplineAndLinearInternals,
+)

@@ -1,7 +1,6 @@
 import jax, jax.numpy as jnp
 from jaxtyping import jaxtyped, Array
 from beartype import beartype
-from bsplx import design_matrix
 from functools import partial
 
 from decoupling._common import dtype_factors, get_design_matrix
@@ -77,3 +76,40 @@ class DecouplingWithSplineInternals(_Decoupling):
 
     def internals(self, inputs):
         return self._internals(inputs, self.coefs, self.knots)
+
+class DecouplingWithSplineAndLinearInternals(_Decoupling):
+
+    slopes: Array
+    intercepts: Array
+    is_linear: Array
+
+    def __init__(self, decoupling: DecouplingWithSplineInternals, linear: dict):
+        super().__init__(decoupling.factors)
+
+        self._spline = decoupling
+
+        n_factors = decoupling.coefs.shape[0]
+        slopes = jnp.zeros(n_factors)
+        intercepts = jnp.zeros(n_factors)
+        is_linear = jnp.zeros(n_factors, dtype=bool)
+
+        for idx, (r2, slope, intercept) in linear.items():
+            slopes = slopes.at[idx].set(slope)
+            intercepts = intercepts.at[idx].set(intercept)
+            is_linear = is_linear.at[idx].set(True)
+
+        self.slopes = slopes
+        self.intercepts = intercepts
+        self.is_linear = is_linear
+        self._linear_indices = set(linear) # for the static single_internal branch
+
+    def single_internal(self, x, idx: int):
+        # idx is a static Python int, so a real branch is fine here
+        if idx in self._linear_indices:
+            return self.slopes[idx] * x + self.intercepts[idx]
+        return self._spline.single_internal(x, idx)
+
+    def internals(self, inputs):            # inputs: (n_factors,)
+        spline_out = self._spline.internals(inputs)          # (n_factors,)
+        linear_out = self.slopes * inputs + self.intercepts  # (n_factors,)
+        return jnp.where(self.is_linear, linear_out, spline_out)

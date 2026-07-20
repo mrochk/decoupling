@@ -79,3 +79,30 @@ def function_error(
     bot = jnp.sqrt(jnp.mean((Ytarget - jnp.mean(Ytarget, axis=0))**2, axis=0))
 
     return top / bot * 100
+
+from decoupling.result import DecouplingWithSplineInternals
+
+def linearity_r2(x, y, eps=1e-6):
+    A = jnp.stack([x, jnp.ones_like(x)], axis=1)
+    coef = jnp.linalg.lstsq(A, y)[0]
+    y_hat = A @ coef
+    ss_res = jnp.sum((y - y_hat)**2)
+    ss_tot = jnp.sum((y - jnp.mean(y))**2)
+    slope, bias = coef
+
+    if ss_tot < eps * jnp.sum(y**2): # if constant
+        return jnp.float32(1.0), slope, bias
+
+    return 1 - ss_res / ss_tot, slope, bias
+
+def find_linear_internals(decoupling: DecouplingWithSplineInternals, X, r2_threshold = 0.98):
+    Z = X @ decoupling.V
+    points = jax.vmap(decoupling.internals)(Z)
+
+    linear = {}
+
+    for idx, (x, y) in enumerate(zip(Z.T, points.T)):
+        r2, a, b = linearity_r2(x, y)
+        if r2 >= r2_threshold: linear[idx] = (r2, a, b)
+
+    return linear
