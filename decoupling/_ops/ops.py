@@ -6,19 +6,20 @@ def convert_array(array: ArrayLike) -> Array:
     return jnp.asarray(array, dtype=jnp.result_type(array, jnp.float32))
 
 @jax.jit(static_argnames='mode')
-def unfold_kolda(tensor: ArrayLike, mode: int) -> ArrayLike:
+def unfold_kolda(tensor: Array, mode: int) -> ArrayLike:
     return jnp.reshape(jnp.moveaxis(tensor, mode, 0), shape=(tensor.shape[mode], -1), order='F')
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
 def khatri_rao(A: Float[Array, 'm k'], B: Float[Array, 'n k']) -> Float[Array, 'mn k']:
-    m, k = A.shape
-    n, _ = B.shape
+    (m, k), (n, _) = A.shape, B.shape
     return (A[:, None, :] * B[None, :, :]).reshape(m*n, k)
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
-def reconstruct(W: Float[Array, 'n r'], V: Float[Array, 'm r'], H: Float[Array, 'p r'], weights: Float[Array, 'r']) -> Float[Array, 'n m p']:
+def reconstruct(W: Float[Array, 'n r'], V: Float[Array, 'm r'], H: Float[Array, 'p r'], weights: Float[Array, 'r']
+) -> Float[Array, 'n m p']:
+
     def forloop(r, tensor):
         weight = weights[r]
         w = W[:, r][:, None, None]

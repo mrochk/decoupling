@@ -37,6 +37,9 @@ class Algorithm:
         show_progress: bool = True,
     ):
 
+        assert all(map(lambda x: x > 0, [rank, ninits, niters, splines_degree]))
+        assert gamma >= 0.0
+
         if splines_dof < splines_degree + 1:
             raise ValueError(f'splines_dof ({splines_dof}) must be >= splines_degree + 1 ({splines_degree + 1})')
 

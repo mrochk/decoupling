@@ -18,6 +18,8 @@ class Decoupling:
     coefs: Array
     knots: Array
 
+    unscaled_: bool = False
+
     @jaxtyped(typechecker=beartype)
     def __init__(self, factors: factors_dtype, coefs, knots, degree: int):
         assert len(factors) >= 3
