@@ -1,14 +1,21 @@
-import jax, jax.numpy as jnp
 import warnings
 from tqdm import tqdm
-from jaxtyping import jaxtyped, Float, Array, ArrayLike
+import jax, jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Tuple, Optional
+from beartype.typing import Tuple, Optional, Union
+from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
-from decoupling._common import as_float_array, dtype_factors, determine_knots, get_design_matrix, get_design_dmatrix, bspline_project
+from decoupling.types import *
+from decoupling import _ops as ops
 from decoupling.utils import cpd_error
 from decoupling.result import DecouplingWithSplineInternals
-from decoupling import _ops as ops
+from decoupling._common import (
+    as_float_array, 
+    determine_knots, 
+    get_design_matrix, 
+    get_design_dmatrix, 
+    bspline_project,
+)
 
 class Algorithm:
 
@@ -17,10 +24,11 @@ class Algorithm:
         rank: int,
         niters: int,
         ninits: int,
+        splines_dof: int,
+        use_smoothing: bool,
         key: Array,
-        gamma: float,
-        dof: int,
-        degree: int,
+        gamma: float = 0.1,
+        splines_degree: int = 3,
         show_progress: bool = True,
     ):
         self.rank = rank
@@ -28,12 +36,13 @@ class Algorithm:
         self.ninits = ninits 
         self.key = key
         self.gamma = gamma
-        self.dof = dof
-        self.degree = degree
+        self.splines_dof = splines_dof
+        self.splines_degree = splines_degree
         self.show_progress = show_progress
+        self.use_smoothing = use_smoothing
         self.is_cmtf = gamma > 0.0
 
-    def run(self, inputs, outputs, jacobians):
+    def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> DecouplingWithSplineInternals:
         inputs, outputs, jacobians = self._convert_inputs(inputs, outputs, jacobians)
 
         J0 = ops.unfold_kolda(jacobians, 0).T
@@ -52,9 +61,9 @@ class Algorithm:
                 self.error = jnp.array(errors)
 
         factors, (coefs, knots) = result
-        return DecouplingWithSplineInternals(factors, coefs, knots, self.degree)
+        return DecouplingWithSplineInternals(factors, coefs, knots, self.splines_degree)
 
-    def _run_once(self, key, inputs, outputs, jacobians, unfoldings):
+    def _run_once(self, key: Array, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype, unfoldings: Tuple) -> Tuple:
         J0, J1, J2 = unfoldings
 
         errors = []
@@ -87,12 +96,12 @@ class Algorithm:
 
         return (best_factors, best_coefs_knots, errors)
 
-    def _convert_inputs(self, inputs: Float[ArrayLike, 'N m'], outputs: Float[ArrayLike, 'N n'], jacobians: Float[ArrayLike, 'n m N'],
-    ) -> Tuple[Float[Array, 'N m'], Float[Array, 'N n'], Float[Array, 'n m N']]:
+    def _convert_inputs(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype,
+    ) -> Tuple[X_dtype, Y_dtype, J_dtype]:
         return (as_float_array(inputs), as_float_array(outputs), as_float_array(jacobians))
 
     @jaxtyped(typechecker=beartype)
-    def _initialize_factors(self, jacobians: Float[Array, 'n m N'], key: Array) -> dtype_factors:
+    def _initialize_factors(self, jacobians: J_dtype, key: Array) -> factors_dtype:
         n, m, N = jacobians.shape
         keys = jax.random.split(key, num=4)
 
@@ -105,8 +114,7 @@ class Algorithm:
         R = jax.random.normal(keys[3], shape=(N, self.rank))
         return (W, V, H, R)
 
-    def _projection(self, H: Float[Array, 'N r'], R: Float[Array, 'N r'], Z: Float[Array, 'N r'],
-    ) -> Tuple[Float[Array, 'N r'], Float[Array, 'N r']]:
+    def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r']) -> Tuple[H_dtype, R_dtype]:
 
         coefs_out, knots_out = [], []
         new_lams = []
@@ -123,19 +131,22 @@ class Algorithm:
                 coefs_out.append(None); knots_out.append(None); new_lams.append(None)
                 continue
 
-            knots = determine_knots(z, self.dof, self.degree, 'even')
-            B = get_design_matrix(z, knots, self.degree)
-            dB = get_design_dmatrix(z, knots, self.degree)
-            D = ops.second_diff_matrix(B.shape[1])
+            knots = determine_knots(z, self.splines_dof, self.splines_degree, 'even' if self.use_smoothing else 'quantile')
+            B = get_design_matrix(z, knots, self.splines_degree)
+            dB = get_design_dmatrix(z, knots, self.splines_degree)
             A = jnp.vstack([dB, jnp.sqrt(self.gamma)*B])
             y = jnp.concatenate([h, jnp.sqrt(self.gamma)*r])
-            ll = self._gcv_grid_search(A, y, D, len(z), self.prev_lams[rank], 100, 100)
 
-            new_lams.append(ll)
-            lam = 10**ll
+            if self.use_smoothing:
+                D = ops.second_diff_matrix(B.shape[1])
+                ll = self._gcv_grid_search(A, y, D, len(z), self.prev_lams[rank], 100, 100)
 
-            A = jnp.concatenate([A, jnp.sqrt(lam) * D])
-            y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
+                new_lams.append(ll)
+                lam = 10**ll
+
+                A = jnp.concatenate([A, jnp.sqrt(lam) * D])
+                y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
+
             coefs = ops.lstsq(A, y).T
             H, R = bspline_project(rank, coefs, B, dB, H, R)
 
@@ -145,6 +156,11 @@ class Algorithm:
 
         self.prev_lams = new_lams
         return H, R, (coefs_out, knots_out)
+
+
+
+
+
 
     def _gcv_grid_search(
         self,
