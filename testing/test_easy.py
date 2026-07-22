@@ -22,7 +22,7 @@ class TestEasy(unittest.TestCase):
         algo = Algorithm(
             rank=self.rank, 
             niters=10, 
-            ninits=5, 
+            ninits=10, 
             key=self.key, 
             gamma=0.1, 
             splines_dof=10, 

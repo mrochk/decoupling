@@ -2,8 +2,8 @@ import warnings
 from tqdm import tqdm
 import jax, jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Tuple, Optional, Union
-from jaxtyping import jaxtyped, Float, Array, ArrayLike
+from beartype.typing import Tuple, Optional
+from jaxtyping import jaxtyped, Float, Array
 
 from decoupling.types import *
 from decoupling import _ops as ops
@@ -19,6 +19,7 @@ from decoupling._common import (
 
 class Algorithm:
 
+    @jaxtyped(typechecker=beartype)
     def __init__(
         self,
         rank: int,
@@ -42,6 +43,7 @@ class Algorithm:
         self.use_smoothing = use_smoothing
         self.is_cmtf = gamma > 0.0
 
+    @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> DecouplingWithSplineInternals:
         inputs, outputs, jacobians = self._convert_inputs(inputs, outputs, jacobians)
 
@@ -63,6 +65,7 @@ class Algorithm:
         factors, (coefs, knots) = result
         return DecouplingWithSplineInternals(factors, coefs, knots, self.splines_degree)
 
+    @jaxtyped(typechecker=beartype)
     def _run_once(self, key: Array, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype, unfoldings: Tuple) -> Tuple:
         J0, J1, J2 = unfoldings
 
@@ -96,6 +99,7 @@ class Algorithm:
 
         return (best_factors, best_coefs_knots, errors)
 
+    @jaxtyped(typechecker=beartype)
     def _convert_inputs(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype,
     ) -> Tuple[X_dtype, Y_dtype, J_dtype]:
         return (as_float_array(inputs), as_float_array(outputs), as_float_array(jacobians))
@@ -114,7 +118,8 @@ class Algorithm:
         R = jax.random.normal(keys[3], shape=(N, self.rank))
         return (W, V, H, R)
 
-    def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r']) -> Tuple[H_dtype, R_dtype]:
+    @jaxtyped(typechecker=beartype)
+    def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r']) -> Tuple[H_dtype, R_dtype, Tuple]:
 
         coefs_out, knots_out = [], []
         new_lams = []
