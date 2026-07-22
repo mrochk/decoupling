@@ -8,10 +8,10 @@ from decoupling import _ops as ops
 
 def find_ninputs(function: Callable):
     assert callable(function)
-    ninputs = 1
-    while True:
+    for ninputs in range(1, 100_001):
         try: function(jnp.zeros(ninputs)); return ninputs
-        except (ValueError, TypeError): ninputs += 1
+        except (ValueError, TypeError): pass
+        except Exception as e: raise RuntimeError(str(e)) 
 
 def collect_information_from_random(
     function: Callable,
@@ -51,11 +51,8 @@ def cpd_error(tensor: J_dtype, factors: factors_dtype, weights: Optional[Float[A
 
 def function_error(target: Callable, decoupling: Callable, inputs) -> float:
     assert callable(target) and callable(decoupling)
-
     Y_target = jax.vmap(target)(inputs)
     Y_decoupling = jax.vmap(decoupling)(inputs)
-
     top = jnp.sqrt(jnp.mean((Y_target - Y_decoupling)**2, axis=0))
     bot = jnp.sqrt(jnp.mean((Y_target - jnp.mean(Y_target, axis=0))**2, axis=0))
-
     return top / bot * 100
