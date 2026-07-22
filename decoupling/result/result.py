@@ -7,7 +7,6 @@ from decoupling.types import *
 from decoupling._splines import design_matrix
 
 class Decoupling:
-
     rank: int
     factors: factors_dtype
     W: W_dtype 

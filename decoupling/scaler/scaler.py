@@ -24,8 +24,7 @@ class JacobianScaler:
         Y_scaled = outputs / self.scaling_factors[None, :]
         return J_scaled, Y_scaled
 
-    def unscale(self, decoupling: Decoupling):
-        decoupling.W_scaled = decoupling.W
-        decoupling.W_unscaled = decoupling.W * self.scaling_factors[:, None]
-        decoupling.W = decoupling.W_unscaled
-        return decoupling
+    def unscale(self, decoupling: Decoupling) -> Decoupling:
+        W_unscaled = decoupling.W * self.scaling_factors[:, None]
+        factors = (W_unscaled, decoupling.V, decoupling.H) + ((decoupling.R,) if decoupling.R is not None else ())
+        return Decoupling(factors, decoupling.coefs, decoupling.knots, decoupling.degree)
