@@ -25,7 +25,7 @@ class TestEasy(unittest.TestCase):
             ninits=10, 
             key=self.key, 
             gamma=0.1, 
-            splines_dof=10, 
+            splines_dof=30, 
             splines_degree=3, 
             use_smoothing=True,
         )

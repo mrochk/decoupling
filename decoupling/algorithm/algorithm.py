@@ -24,12 +24,12 @@ class Algorithm:
         self,
         rank: int,
         niters: int,
-        ninits: int,
         splines_dof: int,
-        use_smoothing: bool,
         key: Array,
+        ninits: int = 1,
         gamma: float = 0.1,
         splines_degree: int = 3,
+        use_smoothing: bool = False,
         show_progress: bool = True,
     ):
         self.rank = rank
@@ -54,8 +54,8 @@ class Algorithm:
 
         min_error = float('inf')
 
-        for key in jax.random.split(self.key, self.ninits):
-            factors, coefs_knots, errors = self._run_once(key, inputs, outputs, jacobians, unfoldings)
+        for i, key in enumerate(jax.random.split(self.key, self.ninits)):
+            factors, coefs_knots, errors = self._run_once(i, key, inputs, outputs, jacobians, unfoldings)
 
             if (error := min(errors)) < min_error:
                 min_error = error
@@ -66,7 +66,7 @@ class Algorithm:
         return DecouplingWithSplineInternals(factors, coefs, knots, self.splines_degree)
 
     @jaxtyped(typechecker=beartype)
-    def _run_once(self, key: Array, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype, unfoldings: Tuple) -> Tuple:
+    def _run_once(self, i: int, key: Array, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype, unfoldings: Tuple) -> Tuple:
         J0, J1, J2 = unfoldings
 
         errors = []
@@ -75,7 +75,7 @@ class Algorithm:
 
         self.prev_lams = jnp.linspace(-6, 3, 100)
 
-        bar = tqdm(range(self.niters), type(self).__name__, disable=not self.show_progress)
+        bar = tqdm(range(self.niters), desc=f'Iter {i+1} / {self.niters}', disable=not self.show_progress)
         for iteration in bar:
             W = ops.cmtf_lstsq(ops.khatri_rao(H, V), R, J0, outputs, self.gamma)
             V = ops.lstsq(ops.khatri_rao(H, W), J1)
