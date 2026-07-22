@@ -3,14 +3,10 @@ from jaxtyping import jaxtyped, Float, Array, ArrayLike
 from beartype.typing import Iterable, Tuple
 from beartype import beartype
 
-@jax.jit(static_argnames=('shape',))
-def reshape(tensor: Array, shape: int | Tuple[int]):
-    return jnp.reshape(tensor, shape, order='F')
-
 @jax.jit(static_argnames=('mode',))
 def unfold_kolda(tensor: ArrayLike, mode: int) -> ArrayLike:
     '''Tensor unfolding as defined in "Tensor decompositions and applications" from Kolda and Bader.'''
-    return reshape(jnp.moveaxis(tensor, mode, 0), shape=(tensor.shape[mode], -1))
+    return jnp.reshape(jnp.moveaxis(tensor, mode, 0), shape=(tensor.shape[mode], -1), order='F')
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
@@ -18,30 +14,6 @@ def khatri_rao(A: Float[Array, 'm k'], B: Float[Array, 'n k']) -> Float[Array, '
     m, k = A.shape
     n, _ = B.shape
     return (A[:, None, :] * B[None, :, :]).reshape(m*n, k)
-
-@jax.jit
-def cpd_factor_solve(unfolded, A, B):
-    KR = khatri_rao(A, B)
-    CC = A.T @ A
-    BB = B.T @ B
-    return unfolded @ KR @ jnp.linalg.pinv(CC * BB)
-
-@jax.jit
-def block_diag(arrays: Iterable[ArrayLike]) -> Float[Array, 'a b']:
-    arrays = [jnp.atleast_2d(a) for a in arrays]
-    rows = sum([a.shape[0] for a in arrays])
-    cols = sum([a.shape[1] for a in arrays])
-
-    result = jnp.zeros((rows, cols), dtype=arrays[0].dtype)
-
-    r, c = 0, 0
-    for a in arrays:
-        rr, cc = a.shape
-        result = result.at[r:r+rr, c:c+cc].set(a)
-        r += rr
-        c += cc
-
-    return result
 
 @jax.jit
 def reconstruct(W: Array, V: Array, H: Array, weights: Array) -> Array:
@@ -56,21 +28,12 @@ def reconstruct(W: Array, V: Array, H: Array, weights: Array) -> Array:
     N, m, n, rank = H.shape[0], V.shape[0], W.shape[0], W.shape[1]
     return jax.lax.fori_loop(0, rank, forloop, jnp.zeros(shape=(n, m, N)))
 
-### vandermonde stuff
-
-def vandermonde_vector(x: float, d: int):
-    return jnp.array([x**e for e in range(d + 1)])
-
-def vandermonde_matrix(values: Iterable[float], degree: int):
-    return jnp.vstack([vandermonde_vector(v, degree) for v in values])
-
-def vandermonde_diag(X, d: int):
-    return block_diag([vandermonde_vector(x, d) for x in X])
-
 ### wrappers for least squares funcs
 
 @jax.jit
-def lstsq(X, Y): return jnp.linalg.lstsq(X, Y)[0].T
+def lstsq(X, Y):
+    res, _, _, s = jnp.linalg.lstsq(X, Y)
+    return res.T, s[-1]/s[0]
 
 @jax.jit(static_argnames='gamma')
 @jaxtyped(typechecker=beartype)

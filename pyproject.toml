@@ -28,3 +28,8 @@ members = ["."]
 
 [tool.uv.sources]
 decoupling = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

@@ -4,7 +4,7 @@ from jaxtyping import jaxtyped, Float, Array, ArrayLike
 from beartype.typing import Callable, Tuple, Optional
 from beartype import beartype
 
-from decoupling._common import get_random_key, find_number_inputs
+from decoupling._common import get_random_key, find_ninputs
 from decoupling import _ops as ops
 
 @jaxtyped(typechecker=beartype)
@@ -25,7 +25,7 @@ def collect_information(
 
     assert callable(function)
 
-    if n_inputs is None: n_inputs = find_number_inputs(function)
+    if n_inputs is None: n_inputs = find_ninputs(function)
     if key is None: key = get_random_key()
 
     jacobian = jax.jit(jax.vmap(jax.jacobian(function)))
@@ -69,7 +69,7 @@ def function_error(
 
     if X is None: 
         if key is None: key = get_random_key()
-        if n_inputs is None: n_inputs = find_number_inputs(decoupling)
+        if n_inputs is None: n_inputs = find_ninputs(decoupling)
         X = jax.random.uniform(key, shape=(N, n_inputs), minval=minval, maxval=maxval)
 
     Ytarget  = jax.vmap(target)(X)

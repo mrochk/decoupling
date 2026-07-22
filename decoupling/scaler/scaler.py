@@ -4,7 +4,7 @@ from beartype.typing import Callable, Tuple, Optional
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
 from decoupling.utils import get_random_key
-from decoupling._common import find_number_inputs
+from decoupling._common import find_ninputs
 
 class JacobianScaler:
     '''
@@ -38,7 +38,7 @@ class JacobianScaler:
     ):
         assert callable(target)
 
-        if ninputs is None: ninputs = find_number_inputs(target)
+        if ninputs is None: ninputs = find_ninputs(target)
         if key is None: key = get_random_key()
 
         match dist:

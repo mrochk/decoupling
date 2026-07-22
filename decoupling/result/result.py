@@ -3,15 +3,16 @@ from jaxtyping import jaxtyped, Array
 from beartype import beartype
 from functools import partial
 
-from decoupling._common import dtype_factors, get_design_matrix
+from decoupling.types import factors_dtype
+from decoupling._common import get_design_matrix
 
 class _Decoupling:
 
     rank: int
-    factors: dtype_factors
+    factors: factors_dtype
 
     @jaxtyped(typechecker=beartype)
-    def __init__(self, factors: dtype_factors):
+    def __init__(self, factors: factors_dtype):
         assert len(factors) >= 3
         assert factors[0].shape[-1] == factors[1].shape[-1] == factors[2].shape[-1]
 

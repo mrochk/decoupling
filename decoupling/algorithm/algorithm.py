@@ -14,7 +14,6 @@ from decoupling._common import (
     determine_knots, 
     get_design_matrix, 
     get_design_dmatrix, 
-    bspline_project,
 )
 
 class Algorithm:
@@ -46,11 +45,8 @@ class Algorithm:
     @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> DecouplingWithSplineInternals:
         inputs, outputs, jacobians = self._convert_inputs(inputs, outputs, jacobians)
-
-        J0 = ops.unfold_kolda(jacobians, 0).T
-        J1 = ops.unfold_kolda(jacobians, 1).T
-        J2 = ops.unfold_kolda(jacobians, 2).T
-        unfoldings = (J0, J1, J2)
+        
+        unfoldings = self._unfold_jacobians(jacobians)
 
         min_error = float('inf')
 
@@ -75,14 +71,18 @@ class Algorithm:
 
         self.prev_lams = jnp.linspace(-6, 3, 100)
 
-        bar = tqdm(range(self.niters), desc=f'Iter {i+1} / {self.niters}', disable=not self.show_progress)
+        bar = tqdm(range(self.niters), desc=f'[Seed {i+1}/{self.ninits}]', disable=not self.show_progress)
         for iteration in bar:
             W = ops.cmtf_lstsq(ops.khatri_rao(H, V), R, J0, outputs, self.gamma)
-            V = ops.lstsq(ops.khatri_rao(H, W), J1)
+            V, rcond = ops.lstsq(ops.khatri_rao(H, W), J1)
+            print(rcond)
             W, V = ops.normalize_columns_V(W, V)
 
-            H = ops.lstsq(ops.khatri_rao(V, W), J2)
-            R = ops.lstsq(W, outputs.T)
+            H, rcond = ops.lstsq(ops.khatri_rao(V, W), J2)
+            print(rcond)
+
+            R, rcond = ops.lstsq(W, outputs.T)
+            print(rcond)
 
             H, R, (coefs, knots) = self._projection(H, R, inputs @ V)
 
@@ -104,6 +104,13 @@ class Algorithm:
     ) -> Tuple[X_dtype, Y_dtype, J_dtype]:
         return (as_float_array(inputs), as_float_array(outputs), as_float_array(jacobians))
 
+    @staticmethod
+    def _unfold_jacobians(jacobians):
+        J0 = ops.unfold_kolda(jacobians, 0).T
+        J1 = ops.unfold_kolda(jacobians, 1).T
+        J2 = ops.unfold_kolda(jacobians, 2).T
+        return (J0, J1, J2)
+
     @jaxtyped(typechecker=beartype)
     def _initialize_factors(self, jacobians: J_dtype, key: Array) -> factors_dtype:
         n, m, N = jacobians.shape
@@ -117,6 +124,13 @@ class Algorithm:
 
         R = jax.random.normal(keys[3], shape=(N, self.rank))
         return (W, V, H, R)
+
+    @staticmethod
+    @jax.jit
+    def bspline_project(i, coefs, B, dB, H, R):
+        H = H.at[:, i].set(dB @ coefs)
+        R = R.at[:, i].set(B @ coefs)
+        return (H, R)
 
     @jaxtyped(typechecker=beartype)
     def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r']) -> Tuple[H_dtype, R_dtype, Tuple]:
@@ -152,20 +166,15 @@ class Algorithm:
                 A = jnp.concatenate([A, jnp.sqrt(lam) * D])
                 y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
 
-            coefs = ops.lstsq(A, y).T
-            H, R = bspline_project(rank, coefs, B, dB, H, R)
+            coefs = ops.lstsq(A, y)[0].T
+            H, R = self.bspline_project(rank, coefs, B, dB, H, R)
 
             # return the coefs for fitting the internals later
-            coefs_out.append(ops.lstsq(B, R[:, rank]).T)
+            coefs_out.append(ops.lstsq(B, R[:, rank])[0].T)
             knots_out.append(knots)
 
         self.prev_lams = new_lams
         return H, R, (coefs_out, knots_out)
-
-
-
-
-
 
     def _gcv_grid_search(
         self,
@@ -194,7 +203,7 @@ class Algorithm:
     def _gcv_score(ll: Array, X: Array, D: Array, y: Array, n: int) -> Array:
         lam = 10.0 ** ll
         X = jnp.concatenate([X, jnp.sqrt(lam)*D])
-        coefs = ops.lstsq(X, y).T
+        coefs = ops.lstsq(X, y)[0].T
         residuals = y[:2*n] - X[:2*n] @ coefs
         rss = jnp.sum(residuals ** 2)
         Q = jnp.linalg.qr(X)[0]
