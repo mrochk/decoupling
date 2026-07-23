@@ -1,2 +1,2 @@
 #!/bin/bash
-uv run -m unittest discover testing -v
+uv run python -m pytest -s

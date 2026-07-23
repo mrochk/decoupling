@@ -2,22 +2,26 @@
 
 # Decoupling
 
-Fast tensor decoupling in Jax.
+**Fast tensor decoupling in Jax.**
 
-This library is a collection of algorithms for decoupling multivariate functions using tensor decompositions.
+Tensor decoupling is a methodology for decoupling multivariate functions using tensor decompositions.
 
 ```python
-from decoupling.algorithm import BasicDecoupling
-from decoupling.utils import collect_information, function_error
+import jax, jax.numpy as jnp
+from decoupling import Algorithm
+from decoupling.utils import collect_information_from_random, function_error
 
 def target(x): # define a simple polynomial
-    return jnp.array([x[0]**3 + x[1]**2 + x[0]*b, x[1]**3 + x[0]**2 + x[0]*b])
+    return jnp.array([x[0]**3 + x[1]**2 + x[0]*x[1], x[1]**3 + x[0]**2 + x[0]*x[1]])
 
-rank, N = 4, 30 # rank and number of samples
-info = collect_information(target, N, key) # collect outputs and jacobians
+key = jax.random.key(0)
+rank = 4; niters = 50; dof = 10
 
-decoupling = BasicDecoupling(rank, key=key).run(*info) # compute decoupling
-errors = function_error(target, decoupling, info[0], key) # evaluate
+# collect information (inputs, outputs, jacobians)
+info = collect_information_from_random(target, N=100, key=key, ninputs=2)
+
+decoupling = Algorithm(rank, niters, dof, key).run(*info) # compute decoupling
+print(function_error(target, decoupling, info[0])) # compare to target
 ```
 
 This project was built using `uv` (https://docs.astral.sh/uv). 
@@ -50,15 +54,8 @@ The goal of this library is to be the reference implementation of tensor decoupl
 
 The other important aspect is that it should be easy to design and add new algorithms, by leveraging already written and reusable code.
 
-### Algorithms Implemented
-
-- Polynomial Tensor Decoupling `decoupling/algorithm/basic` [Dreesen, Ishteva & Schoukens (2015)]
-- Constrained Polynomial TD `decoupling/algorithm/ctd_polynomial` [Hollander, (2017)]
-- CMTF B-Spline Decoupling `decoupling/algorithm/cmtf_bspline` [De Jonghe & Ishteva (2025)]
-- CMTF P-Spline Decoupling `decoupling/algorithm/cmtf_pspline`
-
 ### Testing
 
 ```bash
-uv run -m unittest discover testing -v # or ./test.sh
+uv run python -m pytest -s # or ./test.sh
 ```
