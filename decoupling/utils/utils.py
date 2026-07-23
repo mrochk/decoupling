@@ -21,15 +21,15 @@ def collect_information_from_random(
     function: Callable,
     N: int, 
     key: Array,
-    n_inputs: Optional[int] = None, 
+    ninputs: Optional[int] = None, 
     minval: float = 0.0, maxval: float = 1.0,
 )-> Tuple[X_dtype, Y_dtype, J_dtype]:
     ''' generate random samples and return inputs, outputs and jacobians '''
     assert callable(function)
-    if n_inputs is None: n_inputs = find_ninputs(function)
+    if ninputs is None: ninputs = find_ninputs(function)
     jacobian = jax.jit(jax.vmap(jax.jacobian(function)))
     function = jax.jit(jax.vmap(function))
-    inputs = jax.random.uniform(key, shape=(N, n_inputs), minval=minval, maxval=maxval)
+    inputs = jax.random.uniform(key, shape=(N, ninputs), minval=minval, maxval=maxval)
     outputs, jacobians = function(inputs), jacobian(inputs)
     return (inputs, outputs, jacobians.transpose((1, 2, 0)))
 
