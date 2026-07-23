@@ -3,7 +3,7 @@ from tqdm import tqdm
 import jax, jax.numpy as jnp
 from beartype import beartype
 from functools import partial
-from beartype.typing import Tuple, NamedTuple
+from beartype.typing import Tuple, NamedTuple, Optional
 from jaxtyping import jaxtyped, Float, Array
 
 from decoupling.types import *
@@ -27,11 +27,11 @@ class Algorithm:
     def __init__(
         self,
         rank: int,
-        niters: int,
-        splines_dof: int,
         key: Array,
+        niters: int = 100,
         ninits: int = 1,
         gamma: float = 0.1,
+        splines_dof: Optional[int] = None,
         splines_degree: int = 3,
         use_smoothing: bool = True,
         lam_nvalues_init: int = 256,
@@ -56,7 +56,7 @@ class Algorithm:
         assert all(map(lambda x: x > 0, [rank, ninits, niters, splines_degree]))
         assert gamma >= 0.0
 
-        if splines_dof < splines_degree + 1:
+        if splines_dof is not None and splines_dof < splines_degree + 1:
             raise ValueError(f'dof ({splines_dof}) must be >= degree + 1 ({splines_degree + 1})')
 
         self.rank = rank
@@ -76,6 +76,10 @@ class Algorithm:
     @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
         ''' compute the decoupling representation of target given function inputs, outputs and jacobians '''
+
+        if self.splines_dof is None:
+            self.splines_dof = min(self.splines_degree+1, int(jnp.sqrt(2*inputs.shape[0])))
+            warnings.warn(f'splines_dof not provided, setting it to {self.splines_dof}')
 
         # convert to jax arrays and unfold jacobians
         inputs, outputs, jacobians = self._convert_inputs(inputs, outputs, jacobians)
@@ -212,7 +216,7 @@ class Algorithm:
                 warnings.warn(f'internal {rank} is degenerate (max-min < 1e-6)')
                 H = H.at[:, rank].set(jnp.zeros_like(H[:, rank]))
                 R = R.at[:, rank].set(jnp.zeros_like(R[:, rank]))
-                coefs_out.append(None); knots_out.append(None); new_log_lams.append(None)
+                coefs_out.append(None); knots_out.append(None); new_log_lams.append(jnp.nan)
                 continue
 
             knots = self._determine_knots(z)
