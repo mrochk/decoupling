@@ -23,7 +23,7 @@ def target(x):
 @pytest.fixture(scope="module")
 def data():
     key = jax.random.key(0)
-    X, Y, J = collect_information_from_random(target, N, key)
+    X, Y, J = collect_information_from_random(target, N, 2, key)
     return {"key": key, "X": X, "Y": Y, "J": J}
 
 @pytest.fixture(scope="module")

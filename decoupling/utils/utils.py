@@ -8,20 +8,11 @@ from decoupling.types import *
 from decoupling import _ops as ops
 
 @jaxtyped(typechecker=beartype)
-def find_ninputs(function: Callable):
-    ''' find the number of inputs of a function '''
-    assert callable(function)
-    for ninputs in range(1, 100_001):
-        try: function(jnp.zeros(ninputs)); return ninputs
-        except (ValueError, TypeError): pass
-        except Exception as e: raise RuntimeError(str(e)) 
-
-@jaxtyped(typechecker=beartype)
 def collect_information_from_random(
     function: Callable,
     N: int, 
+    ninputs: int, 
     key: Array,
-    ninputs: Optional[int] = None, 
     minval: float = 0.0, maxval: float = 1.0,
 )-> Tuple[X_dtype, Y_dtype, J_dtype]:
     ''' generate random samples and return inputs, outputs and jacobians '''
