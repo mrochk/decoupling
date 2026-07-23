@@ -4,6 +4,7 @@ from beartype.typing import Tuple
 from jaxtyping import jaxtyped, Float, Array
 
 from decoupling.result import Decoupling
+from decoupling.types import J_dtype, Y_dtype
 
 class JacobianScaler:
     '''
@@ -14,12 +15,12 @@ class JacobianScaler:
     scaling_factors: Float[Array, 'n']
 
     @jaxtyped(typechecker=beartype)
-    def __init__(self, jacobians: Float[Array, 'n m N']):
+    def __init__(self, jacobians: J_dtype):
         n, m, N = jacobians.shape
         self.scaling_factors = jnp.linalg.norm(jacobians.reshape(n, -1), axis=1) / jnp.sqrt(m*N)
         
     @jaxtyped(typechecker=beartype)
-    def scale(self, jacobians, outputs) -> Tuple[Float[Array, 'n m N'], Float[Array, 'N n']]:
+    def scale(self, jacobians: J_dtype, outputs: Y_dtype) -> Tuple[J_dtype, Y_dtype]:
         J_scaled = jacobians / self.scaling_factors[:, None, None]
         Y_scaled = outputs / self.scaling_factors[None, :]
         return J_scaled, Y_scaled

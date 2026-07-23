@@ -1,18 +1,19 @@
 import jax, jax.numpy as jnp
-from jaxtyping import jaxtyped, Array
 from beartype import beartype
-from beartype.typing import Optional
+from beartype.typing import Iterable
+from jaxtyping import jaxtyped, Array
 
 from decoupling.types import *
 from decoupling._splines import design_matrix
 
 class Decoupling:
     rank: int
-    factors: factors_dtype
+
     W: W_dtype 
     V: V_dtype
     H: H_dtype
-    R: Optional[R_dtype]
+    R: R_dtype
+    factors: factors_dtype
 
     degree: int
     coefs: Array
@@ -21,12 +22,10 @@ class Decoupling:
     unscaled_: bool = False
 
     @jaxtyped(typechecker=beartype)
-    def __init__(self, factors: factors_dtype, coefs, knots, degree: int):
-        assert len(factors) >= 3
-        assert factors[0].shape[-1] == factors[1].shape[-1] == factors[2].shape[-1]
+    def __init__(self, factors: factors_dtype, coefs: Iterable, knots: Iterable, degree: int):
+        assert len(factors) == 4
 
-        if len(factors) == 4: self.W, self.V, self.H, self.R = factors
-        else: self.W, self.V, self.H = factors
+        (self.W, self.V, self.H, self.R) = factors
 
         self.factors = factors
         self.rank = self.W.shape[1]
@@ -35,6 +34,7 @@ class Decoupling:
         self.knots = jnp.stack(knots)
         self.degree = degree
 
+        @jax.jit
         def _single_internal_static(x, coefs, knots):
             dm = design_matrix(jnp.atleast_1d(x), knots, self.degree)
             return (dm @ coefs).squeeze()
@@ -43,18 +43,16 @@ class Decoupling:
 
     @staticmethod
     @jax.jit(static_argnames='internals')
-    def _forward(inputs, W, internals, V):
+    @jaxtyped(typechecker=beartype)
+    def _forward(inputs: Float[Array, 'm'], W: W_dtype, internals, V: V_dtype):
         return W @ internals(V.T @ inputs)
 
-    def forward(self, inputs):
+    def forward(self, inputs: Float[Array, 'm']) -> Float[Array, 'n']:
         return self._forward(inputs, self.W, self.internals, self.V)
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Float[Array, 'm']):
         return self.forward(inputs)
 
-    def single_internal(self, x, idx: int):
-        dm = design_matrix(jnp.atleast_1d(x), self.knots[idx], self.degree)
-        return (dm @ self.coefs[idx]).squeeze()
-
-    def internals(self, inputs):
+    @jaxtyped(typechecker=beartype)
+    def internals(self, inputs: Float[Array, 'r']) -> Float[Array, 'r']:
         return self._internals(inputs, self.coefs, self.knots)
