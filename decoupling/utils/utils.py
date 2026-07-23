@@ -58,7 +58,6 @@ def cpd_error(tensor: J_dtype, factors: factors_dtype, weights: Optional[Float[A
 @jaxtyped(typechecker=beartype)
 def function_error(target: Callable, decoupling: Decoupling, inputs: X_dtype) -> Float[Array, 'n']:
     ''' compute the per-output error between target function and decoupling '''
-    assert callable(target) and callable(decoupling)
     Y_target = jax.vmap(target)(inputs)
     Y_decoupling = jax.vmap(decoupling)(inputs)
     top = jnp.sqrt(jnp.mean((Y_target - Y_decoupling)**2, axis=0))

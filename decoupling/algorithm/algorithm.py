@@ -233,7 +233,8 @@ class Algorithm:
             H, R = self._bspline_project(rank, coefs, B, dB, H, R)
 
             # return the coefs for fitting the internals later
-            coefs_out.append(coefs)
+            g_coefs = jnp.linalg.lstsq(B, R[:, rank])[0]
+            coefs_out.append(g_coefs)
             knots_out.append(knots)
 
         return H, R, (coefs_out, knots_out), new_log_lams
