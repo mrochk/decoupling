@@ -1,24 +1,32 @@
 import jax, jax.numpy as jnp
 from beartype import beartype
+from beartype.typing import Tuple
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
+from decoupling.types import W_dtype, V_dtype, H_dtype, J_dtype
+
+@jaxtyped(typechecker=beartype)
 def convert_array(array: ArrayLike) -> Array:
+    ''' convert an array-like to jax float32 array if it's not already '''
     return jnp.asarray(array, dtype=jnp.result_type(array, jnp.float32))
 
 @jax.jit(static_argnames='mode')
-def unfold_kolda(tensor: Array, mode: int) -> ArrayLike:
+@jaxtyped(typechecker=beartype)
+def unfold_kolda(tensor: Array, mode: int) -> Array:
+    ''' tensor unfolding as defined by Kolda & Bader '''
     return jnp.reshape(jnp.moveaxis(tensor, mode, 0), shape=(tensor.shape[mode], -1), order='F')
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
-def khatri_rao(A: Float[Array, 'm k'], B: Float[Array, 'n k']) -> Float[Array, 'mn k']:
+def khatri_rao(A: Float[Array, 'm k'], B: Float[Array, 'n k']) -> Float[Array, 'm*n k']:
+    ''' khatri-rao product of two matrices '''
     (m, k), (n, _) = A.shape, B.shape
     return (A[:, None, :] * B[None, :, :]).reshape(m*n, k)
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
-def reconstruct(W: Float[Array, 'n r'], V: Float[Array, 'm r'], H: Float[Array, 'p r'], weights: Float[Array, 'r']
-) -> Float[Array, 'n m p']:
+def reconstruct(W: W_dtype, V: V_dtype, H: H_dtype, weights: Float[Array, 'r']) -> J_dtype:
+    ''' reconstruct full tensor from factors '''
 
     def forloop(r, tensor):
         weight = weights[r]
@@ -32,21 +40,24 @@ def reconstruct(W: Float[Array, 'n r'], V: Float[Array, 'm r'], H: Float[Array, 
     return jax.lax.fori_loop(0, rank, forloop, jnp.zeros(shape=(n, m, p)))
 
 @jax.jit
-def lstsq(X, Y):
+@jaxtyped(typechecker=beartype)
+def lstsq(X: Array, Y: Array) -> Tuple[Array, Float[Array, '']]:
+    ''' wrapper around jnp.linalg.lsqtsq, returns solution and rcond '''
     solution, _, _, svalues = jnp.linalg.lstsq(X, Y)
     rcond = svalues[-1] / svalues[0]
     return solution.T, rcond
 
-@jax.jit(static_argnames='gamma')
+@jax.jit
 @jaxtyped(typechecker=beartype)
-def cmtf_lstsq(X1, X2, Y1, Y2, gamma: float):
+def cmtf_lstsq(X1, X2, Y1, Y2, gamma: Float[Array, '']) -> Tuple[Array, Float[Array, '']]:
     gamma = jnp.sqrt(gamma)
     X = jnp.concatenate([X1, gamma*X2], axis=0)
     Y = jnp.concatenate([Y1, gamma*Y2], axis=0)
     return lstsq(X, Y)
 
 @jax.jit
-def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
+@jaxtyped(typechecker=beartype)
+def normalize_columns_V(W: W_dtype, V: V_dtype) -> Tuple[W_dtype, V_dtype]:
     rank = W.shape[1]
 
     def _(i, W_V):
@@ -60,7 +71,7 @@ def normalize_columns_V(W: Float[Array, 'n r'], V: Float[Array, 'm r']):
     return jax.lax.fori_loop(0, rank, _, (W, V))
 
 @jax.jit(static_argnames='n')
+@jaxtyped(typechecker=beartype)
 def second_difference_matrix(n: int) -> Array:
-    D1 = jnp.diff(jnp.eye(n), axis=0)
-    D2 = jnp.diff(D1, axis=0)
-    return D2
+    ''' return second-order finite difference matrix for computing P-splines coefs '''
+    return jnp.diff(jnp.diff(jnp.eye(n), axis=0), axis=0)

@@ -47,7 +47,7 @@ class Algorithm:
         self.niters = niters
         self.ninits = ninits 
         self.key = key
-        self.gamma = gamma
+        self.gamma = jnp.asarray(gamma)
         self.splines_dof = splines_dof
         self.splines_degree = splines_degree
         self.show_progress = show_progress
