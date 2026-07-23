@@ -78,7 +78,7 @@ class Algorithm:
         ''' compute the decoupling representation of target given function inputs, outputs and jacobians '''
 
         if self.splines_dof is None:
-            self.splines_dof = min(self.splines_degree+1, int(jnp.sqrt(2*inputs.shape[0])))
+            self.splines_dof = max(self.splines_degree+1, int(jnp.sqrt(2*inputs.shape[0])))
             warnings.warn(f'splines_dof not provided, setting it to {self.splines_dof}')
 
         # convert to jax arrays and unfold jacobians
