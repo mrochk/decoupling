@@ -12,12 +12,14 @@ from decoupling.utils import cpd_error
 from decoupling.result import Decoupling
 from decoupling._splines import design_matrix, design_dmatrix
 
-class Information(NamedTuple):
-    errors_: Array  # cpd error for each iteration
-    lambdas_: Array # smoothing terms for each internal
-    rconds_: dict[str, Array] # reciprocal condition numbers for each factor
-
 class Algorithm:
+    ''' tensor decoupling algorithm class '''
+
+    class Information(NamedTuple):
+        ''' named tuple containing information about the best run'''
+        errors: Array  # cpd error for each iteration
+        lambdas: Array # smoothing terms for each internal
+        rconds: dict[str, Array] # reciprocal condition numbers for each factor
 
     info: Information
 
@@ -36,12 +38,26 @@ class Algorithm:
         lam_nvalues: int = 32,
         show_progress: bool = True,
     ):
+        '''
+        Args:
+            rank (int): rank of the decomposition (number of internals) 
+            niters (int): number of iterations 
+            splines_dof (int): splines (internals) degrees of freedom 
+            key (Array): jax random seed 
+            ninits (int): number of runs to try from different seeds derived from key 
+            gamma (float): weight of zeroth-order information in cmtf objective 
+            splines_degree (int): splines degree (default=3) 
+            use_smoothing (bool): whether to use P-splines or B-splines 
+            lam_nvalues_init (int): is use_smoothing is true, how many lambdas to try at iter 0 
+            lam_nvalues (int): is use_smoothing is true, how many lambdas to try at iter > 0 
+            show_progress (bool): whether to show the progress bar 
+        '''
 
         assert all(map(lambda x: x > 0, [rank, ninits, niters, splines_degree]))
         assert gamma >= 0.0
 
         if splines_dof < splines_degree + 1:
-            raise ValueError(f'splines_dof ({splines_dof}) must be >= splines_degree + 1 ({splines_degree + 1})')
+            raise ValueError(f'dof ({splines_dof}) must be >= degree + 1 ({splines_degree + 1})')
 
         self.rank = rank
         self.niters = niters
@@ -59,6 +75,7 @@ class Algorithm:
 
     @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
+        ''' compute the decoupling representation of target given function inputs, outputs and jacobians '''
 
         # convert to jax arrays and unfold jacobians
         inputs, outputs, jacobians = self._convert_inputs(inputs, outputs, jacobians)
@@ -66,12 +83,12 @@ class Algorithm:
 
         result, min_error = None, float('inf')
         for i, key in enumerate(jax.random.split(self.key, self.ninits)):
-            factors, coefs_knots, errors, rconds, lambdas = self._run_once(i, key, inputs, outputs, jacobians, unfoldings)
+            factors, coefs_knots, info = self._run_once(i, key, inputs, outputs, jacobians, unfoldings)
 
-            if (error := min(errors)) < min_error:
+            if (error := min(info.errors)) < min_error:
                 min_error = error
                 result = (factors, coefs_knots)
-                self.info = Information(jnp.asarray(errors), jnp.asarray(lambdas), {k: jnp.asarray(rconds[k]) for k in rconds.keys()})
+                self.info = info
 
         if result is None: raise RuntimeError('all seeds failed')
 
@@ -79,7 +96,16 @@ class Algorithm:
         return Decoupling(factors, coefs, knots, self.splines_degree)
 
     @jaxtyped(typechecker=beartype)
-    def _run_once(self, i: int, key: Array, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype, unfoldings: Tuple) -> Tuple:
+    def _run_once(
+        self, 
+        i: int, 
+        key: Array, 
+        inputs: X_dtype, 
+        outputs: Y_dtype, 
+        jacobians: J_dtype, 
+        unfoldings: Tuple[Array, Array, Array],
+    ) -> Tuple[factors_dtype, Tuple, Information]:
+
         J0, J1, J2 = unfoldings
 
         errors = []
@@ -117,8 +143,8 @@ class Algorithm:
             errors.append(error)
 
             if iteration == 0 or error < best_error:
-                best_factors = (W, V, H, R)
-                best_coefs_knots = (coefs, knots)
+                factors = (W, V, H, R)
+                coefs_knots = (coefs, knots)
                 best_iter = iteration
                 best_error = error
 
@@ -126,7 +152,12 @@ class Algorithm:
 
             lambdas.append(log_lams)
 
-        return (best_factors, best_coefs_knots, errors, rconds, lambdas)
+        errors = jnp.asarray(errors)
+        lambdas = jnp.asarray(lambdas)
+        rconds = {k: jnp.asarray(rconds[k]) for k in rconds.keys()}
+        info = Algorithm.Information(errors, lambdas, rconds)
+
+        return (factors, coefs_knots, info)
 
     @jaxtyped(typechecker=beartype)
     def _convert_inputs(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype,
@@ -134,7 +165,8 @@ class Algorithm:
         return (ops.convert_array(inputs), ops.convert_array(outputs), ops.convert_array(jacobians))
 
     @staticmethod
-    def _unfold_jacobians(jacobians):
+    @jaxtyped(typechecker=beartype)
+    def _unfold_jacobians(jacobians: J_dtype) -> Tuple[Array, Array, Array]:
         J0 = ops.unfold_kolda(jacobians, 0).T
         J1 = ops.unfold_kolda(jacobians, 1).T
         J2 = ops.unfold_kolda(jacobians, 2).T
@@ -152,13 +184,15 @@ class Algorithm:
         return (W, V, H, R)
 
     @staticmethod
-    @jax.jit
-    def _bspline_project(i, coefs, B, dB, H, R):
-        H = H.at[:, i].set(dB @ coefs)
-        R = R.at[:, i].set(B @ coefs)
+    @jax.jit(static_argnames='rank')
+    @jaxtyped(typechecker=beartype)
+    def _bspline_project(rank: int, coefs: Array, B: Array, dB: Array, H: H_dtype, R: R_dtype) -> Tuple[H_dtype, R_dtype]:
+        H = H.at[:, rank].set(dB @ coefs)
+        R = R.at[:, rank].set(B @ coefs)
         return (H, R)
 
-    def _design_matrices(self, x, knots):
+    @jaxtyped(typechecker=beartype)
+    def _design_matrices(self, x: Array, knots: Array) -> Tuple[Array, Array]:
         B = design_matrix(x, knots, self.splines_degree)
         dB = design_dmatrix(x, knots, self.splines_degree)
         return (B, dB)

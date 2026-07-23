@@ -81,13 +81,13 @@ def test_run_returns_finite_factors(fitted):
 def test_error_decreases(fitted):
     # best-so-far error should be monotone non-increasing by construction,
     # and the final best should be well below the first iterate.
-    errs = fitted["algo"].info.errors_
+    errs = fitted["algo"].info.errors
     running_best = jax.lax.associative_scan(jnp.minimum, errs)
     assert jnp.all(jnp.diff(running_best) <= 1e-8)
     assert errs.min() < errs[0]
 
 def test_no_nan_in_error_history(fitted):
-    errs = fitted["algo"].info.errors_
+    errs = fitted["algo"].info.errors
     assert jnp.all(jnp.isfinite(errs)), "NaN/inf in error history -- seed blew up"
 
 # --------------------------------------------------------------------------- #
