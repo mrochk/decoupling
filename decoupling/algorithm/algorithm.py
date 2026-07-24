@@ -18,7 +18,7 @@ class Algorithm:
     class Information(NamedTuple):
         ''' named tuple containing information about the best run'''
         errors: Array  # cpd error for each iteration
-        lambdas: Array # smoothing terms for each internal
+        lambdas: Optional[Array] # smoothing terms for each internal
         rconds: dict[str, Array] # reciprocal condition numbers for each factor
 
     info: Information
@@ -89,10 +89,12 @@ class Algorithm:
         for i, key in enumerate(jax.random.split(self.key, self.ninits)):
             factors, coefs_knots, info = self._run_once(i, key, inputs, outputs, jacobians, unfoldings)
 
-            if (error := min(info.errors)) < min_error:
-                min_error = error
-                result = (factors, coefs_knots)
-                self.info = info
+            if (error := min(info.errors)) >= min_error or jnp.isnan(error): continue
+            if any(map(lambda x: x is None, coefs_knots[0])): continue
+
+            min_error = error
+            result = (factors, coefs_knots)
+            self.info = info
 
         if result is None: raise RuntimeError('all seeds failed')
 
@@ -157,7 +159,8 @@ class Algorithm:
             lambdas.append(log_lams)
 
         errors = jnp.asarray(errors)
-        lambdas = jnp.asarray(lambdas)
+        if self.use_smoothing: lambdas = jnp.asarray(lambdas)
+        else: lambdas = None
         rconds = {k: jnp.asarray(rconds[k]) for k in rconds.keys()}
         info = Algorithm.Information(errors, lambdas, rconds)
 
@@ -216,7 +219,8 @@ class Algorithm:
                 warnings.warn(f'internal {rank} is degenerate (max-min < 1e-6)')
                 H = H.at[:, rank].set(jnp.zeros_like(H[:, rank]))
                 R = R.at[:, rank].set(jnp.zeros_like(R[:, rank]))
-                coefs_out.append(None); knots_out.append(None); new_log_lams.append(jnp.nan)
+                coefs_out.append(None); knots_out.append(None)
+                if self.use_smoothing: new_log_lams.append(jnp.nan)
                 continue
 
             knots = self._determine_knots(z)
