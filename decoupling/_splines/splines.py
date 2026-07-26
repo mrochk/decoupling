@@ -1,7 +1,8 @@
 import bsplx
 import jax, jax.numpy as jnp
-from jaxtyping import jaxtyped, Array, Float, Int
 from beartype import beartype
+from beartype.typing import Tuple
+from jaxtyping import jaxtyped, Array, Float
 
 @jax.jit(static_argnames='degree')
 @jaxtyped(typechecker=beartype)
@@ -18,3 +19,8 @@ def design_dmatrix(inputs: Float[Array, 'n'], knots: Float[Array, 'k'], degree: 
     dmatrix = bsplx.design_dmatrix(inputs, knots, degree)
     dmatrix = jnp.concatenate([jnp.zeros((dmatrix.shape[0], 1)), dmatrix], axis=1)
     return dmatrix
+
+@jax.jit(static_argnames='degree')
+@jaxtyped(typechecker=beartype)
+def design_matrices(inputs: Float[Array, 'n'], knots: Float[Array, 'k'], degree: int) -> Tuple:
+    return (design_matrix(inputs, knots, degree), design_dmatrix(inputs, knots, degree))

@@ -1,1 +1,5 @@
-from .splines import design_matrix, design_dmatrix
+from .splines import (
+    design_matrices,
+    design_matrix,
+    design_dmatrix,
+)

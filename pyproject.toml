@@ -1,6 +1,6 @@
 [project]
 name = "decoupling"
-version = "0.0.3"
+version = "0.0.4"
 description = "Decoupling multivariate functions using tensor decompositions, in Jax."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -9,7 +9,7 @@ dependencies = [
     "jaxtyping>=0.3.9",
     "beartype>=0.22.9",
     "tqdm>=4.67.3",
-    "bsplx>=0.1.1",
+    "bsplx>=0.2.0",
 ]
 
 authors = [{ name = "Maxime Rochkoulets", email = "mrochkoulets@gmail.com" }]

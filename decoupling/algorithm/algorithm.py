@@ -10,7 +10,7 @@ from decoupling.types import *
 from decoupling import _ops as ops
 from decoupling.utils import cpd_error
 from decoupling.result import Decoupling
-from decoupling._splines import design_matrix, design_dmatrix
+from decoupling._splines import design_matrices
 
 class Algorithm:
     ''' tensor decoupling algorithm class '''
@@ -183,7 +183,6 @@ class Algorithm:
     def _initialize_factors(self, jacobians: J_dtype, key: Array) -> factors_dtype:
         n, m, N = jacobians.shape
         keys = jax.random.split(key, num=4)
-
         W = jax.random.normal(keys[0], shape=(n, self.rank))
         V = jax.random.normal(keys[1], shape=(m, self.rank))
         H = jax.random.normal(keys[2], shape=(N, self.rank))
@@ -193,16 +192,10 @@ class Algorithm:
     @staticmethod
     @jax.jit(static_argnames='rank')
     @jaxtyped(typechecker=beartype)
-    def _bspline_project(rank: int, coefs: Array, B: Array, dB: Array, H: H_dtype, R: R_dtype) -> Tuple[H_dtype, R_dtype]:
+    def _project(rank: int, coefs: Array, B: Array, dB: Array, H: H_dtype, R: R_dtype) -> Tuple[H_dtype, R_dtype]:
         H = H.at[:, rank].set(dB @ coefs)
         R = R.at[:, rank].set(B @ coefs)
         return (H, R)
-
-    @jaxtyped(typechecker=beartype)
-    def _design_matrices(self, x: Array, knots: Array) -> Tuple[Array, Array]:
-        B = design_matrix(x, knots, self.splines_degree)
-        dB = design_dmatrix(x, knots, self.splines_degree)
-        return (B, dB)
 
     @jaxtyped(typechecker=beartype)
     def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r'], prev_log_lams) -> Tuple:
@@ -225,7 +218,7 @@ class Algorithm:
 
             knots = self._determine_knots(z)
 
-            B, dB = self._design_matrices(z, knots)
+            B, dB = design_matrices(z, knots, self.splines_degree)
             A = jnp.vstack([dB, jnp.sqrt(self.gamma)*B])
             y = jnp.concatenate([h, jnp.sqrt(self.gamma)*r])
 
@@ -238,7 +231,7 @@ class Algorithm:
                 y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
 
             coefs, _ = ops.lstsq(A, y)
-            H, R = self._bspline_project(rank, coefs, B, dB, H, R)
+            H, R = self._project(rank, coefs, B, dB, H, R)
 
             # return the coefs for fitting the internals later
             g_coefs = jnp.linalg.lstsq(B, R[:, rank])[0]

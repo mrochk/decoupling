@@ -24,16 +24,16 @@ wheels = [
 
 [[package]]
 name = "bsplx"
-version = "0.1.1"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beartype" },
     { name = "jax" },
     { name = "jaxtyping" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/03/5a/fd68af856814bc6c45c761e3a471de469fa022ea8bdb24eaf26e92f0df62/bsplx-0.1.1.tar.gz", hash = "sha256:dbfeb35b4fd74c477cb987b0b02713d31d8c0866f2ae5dde4d318f63d73ff7cd", size = 21639, upload-time = "2026-05-18T23:59:49.151Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/38/f6/a27819c8b72818a273dffbf7c17a60271297a0c15d2e1a6a2efe8a811487/bsplx-0.2.0.tar.gz", hash = "sha256:68b653d684bdb3a0639ddee38c91ebc199740859cff297133e15ea9c34ce6913", size = 21351, upload-time = "2026-07-26T20:09:00.336Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8e/9c/71d7335503e86ac692f7080edcd5755a29a2c931c9c941e2286fc52e4f32/bsplx-0.1.1-py3-none-any.whl", hash = "sha256:7a63335391ecc79be3eecd10c08e82162d8345336fbf1e7af246f2987628c906", size = 3186, upload-time = "2026-05-18T23:59:47.813Z" },
+    { url = "https://files.pythonhosted.org/packages/32/a2/e10d27703fdac99fc2b65bb90901607f6ff00acd01c968cea72130dcaba3/bsplx-0.2.0-py3-none-any.whl", hash = "sha256:b3a4c60d03a18f388312abc2d82941fe47c82e67b42e0c014ad3727c51015b68", size = 3075, upload-time = "2026-07-26T20:08:59.073Z" },
 ]
 
 [[package]]
@@ -47,7 +47,7 @@ wheels = [
 
 [[package]]
 name = "decoupling"
-version = "0.0.0"
+version = "0.0.4"
 source = { virtual = "." }
 dependencies = [
     { name = "beartype" },
@@ -65,7 +65,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "beartype", specifier = ">=0.22.9" },
-    { name = "bsplx", specifier = ">=0.1.1" },
+    { name = "bsplx", specifier = ">=0.2.0" },
     { name = "jax", specifier = ">=0.9.0.1" },
     { name = "jaxtyping", specifier = ">=0.3.9" },
     { name = "tqdm", specifier = ">=4.67.3" },
