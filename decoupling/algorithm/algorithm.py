@@ -6,6 +6,8 @@ from functools import partial
 from beartype.typing import Tuple, NamedTuple, Optional
 from jaxtyping import jaxtyped, Float, Array
 
+from bsplx import repeat_knots
+
 from decoupling.types import *
 from decoupling import _ops as ops
 from decoupling.utils import cpd_error
@@ -35,7 +37,7 @@ class Algorithm:
         splines_degree: int = 3,
         use_smoothing: bool = True,
         lam_nvalues_init: int = 256,
-        lam_nvalues: int = 32,
+        lam_nvalues: int = 33,
         show_progress: bool = True,
     ):
         '''
@@ -156,7 +158,7 @@ class Algorithm:
 
             bar.set_postfix_str(f'error={error:.4f}, best={best_error:.4f} ({best_iter}), rcond={min_rcond:.1e}')
 
-            lambdas.append(log_lams)
+            lambdas.append([jnp.nan if l is None else l for l in log_lams])
 
         errors = jnp.asarray(errors)
         if self.use_smoothing: lambdas = jnp.asarray(lambdas)
@@ -213,7 +215,7 @@ class Algorithm:
                 H = H.at[:, rank].set(jnp.zeros_like(H[:, rank]))
                 R = R.at[:, rank].set(jnp.zeros_like(R[:, rank]))
                 coefs_out.append(None); knots_out.append(None)
-                if self.use_smoothing: new_log_lams.append(jnp.nan)
+                if self.use_smoothing: new_log_lams.append(None)
                 continue
 
             knots = self._determine_knots(z)
@@ -223,7 +225,9 @@ class Algorithm:
             y = jnp.concatenate([h, jnp.sqrt(self.gamma)*r])
 
             if self.use_smoothing:
+
                 D = ops.second_difference_matrix(B.shape[1])
+
                 log_lam = self._gcv_grid_search(A, y, D, len(z), prev_log_lams[rank])
                 new_log_lams.append(log_lam)
 
@@ -234,8 +238,7 @@ class Algorithm:
             H, R = self._project(rank, coefs, B, dB, H, R)
 
             # return the coefs for fitting the internals later
-            g_coefs = jnp.linalg.lstsq(B, R[:, rank])[0]
-            coefs_out.append(g_coefs)
+            coefs_out.append(coefs)
             knots_out.append(knots)
 
         return H, R, (coefs_out, knots_out), new_log_lams
@@ -248,16 +251,16 @@ class Algorithm:
         return best(jnp.linspace(log_lam - 1, log_lam + 1, self.lam_nvalues))
 
     @staticmethod
-    @jax.jit(static_argnames='n')
-    def _gcv_score(log_lam: Array, X: Array, D: Array, y: Array, n: int) -> Array:
+    @partial(jax.jit, static_argnames='n')
+    def _gcv_score(log_lam, X, D, y, n):
         lam = 10.0 ** log_lam
         Xa = jnp.concatenate([X, jnp.sqrt(lam) * D])
-        Q, R = jnp.linalg.qr(Xa)
-        coefs = jax.scipy.linalg.solve_triangular(R, Q.T @ y)
+        coefs, _ = ops.lstsq(Xa, y)
         residuals = y[:2*n] - Xa[:2*n] @ coefs
         rss = jnp.sum(residuals**2)
+        Q = jnp.linalg.qr(Xa)[0]
         df = jnp.sum(Q[:2*n]**2)
-        return rss / ((2*n-df)**2)
+        return (n * rss) / (n - df)**2
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
         if self.use_smoothing: return Algorithm._determine_knots_even(z, self.splines_dof, self.splines_degree)
@@ -268,9 +271,7 @@ class Algorithm:
     def _determine_knots_even(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
         internals = dof - degree + 1
         knots = jnp.linspace(jnp.min(u), jnp.max(u), internals)
-        begin = jnp.repeat(knots[0], degree)
-        end   = jnp.repeat(knots[-1], degree)
-        return jnp.concat([begin, knots, end])
+        return repeat_knots(knots, degree)
 
     @staticmethod
     @jax.jit(static_argnames=('dof', 'degree'))
@@ -280,10 +281,7 @@ class Algorithm:
         qs = jnp.linspace(0, 1, internals)
         knots = jnp.quantile(u, qs)
         knots = jax.vmap(partial(Algorithm._closest, u=u))(knots)
-
-        begin = jnp.repeat(knots[0], degree)
-        end = jnp.repeat(knots[-1], degree)
-        return jnp.concat([begin, knots, end])
+        return repeat_knots(knots, degree)
 
     @staticmethod
     @jax.jit
