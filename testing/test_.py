@@ -43,6 +43,7 @@ def fitted(data, scaled):
         ninits=3,
     )
     dec = algo.run(data["X"], scaled["Ys"], scaled["Js"])
+    print(algo.info.lambdas)
     return {"algo": algo, "decoupling": dec}
 
 # --------------------------------------------------------------------------- #

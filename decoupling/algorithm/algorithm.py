@@ -37,7 +37,7 @@ class Algorithm:
         splines_degree: int = 3,
         use_smoothing: bool = True,
         lam_nvalues_init: int = 256,
-        lam_nvalues: int = 33,
+        lam_nvalues: int = 128,
         show_progress: bool = True,
     ):
         '''
@@ -200,10 +200,10 @@ class Algorithm:
         return (H, R)
 
     @jaxtyped(typechecker=beartype)
-    def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r'], prev_log_lams) -> Tuple:
+    def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r'], prev_lls) -> Tuple:
 
         coefs_out, knots_out = [], []
-        new_log_lams = []
+        new_lls = []
 
         for rank in range(H.shape[1]):
             z, h, r = Z[:, rank], H[:, rank], R[:, rank]
@@ -215,7 +215,7 @@ class Algorithm:
                 H = H.at[:, rank].set(jnp.zeros_like(H[:, rank]))
                 R = R.at[:, rank].set(jnp.zeros_like(R[:, rank]))
                 coefs_out.append(None); knots_out.append(None)
-                if self.use_smoothing: new_log_lams.append(None)
+                if self.use_smoothing: new_lls.append(None)
                 continue
 
             knots = self._determine_knots(z)
@@ -228,10 +228,10 @@ class Algorithm:
 
                 D = ops.second_difference_matrix(B.shape[1])
 
-                log_lam = self._gcv_grid_search(A, y, D, len(z), prev_log_lams[rank])
-                new_log_lams.append(log_lam)
+                ll = self._gcv_grid_search(A, y, D, prev_lls[rank])
+                new_lls.append(ll)
 
-                A = jnp.concatenate([A, jnp.sqrt(10**log_lam) * D])
+                A = jnp.concatenate([A, jnp.sqrt(10**ll) * D])
                 y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
 
             coefs, _ = ops.lstsq(A, y)
@@ -241,26 +241,40 @@ class Algorithm:
             coefs_out.append(coefs)
             knots_out.append(knots)
 
-        return H, R, (coefs_out, knots_out), new_log_lams
+        return H, R, (coefs_out, knots_out), new_lls
 
-    def _gcv_grid_search(self, X, y, D, n, log_lam) -> Array:
+    def _gcv_grid_search(self, X, y, D, prev_ll) -> Array:
         y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
-        score = partial(self._gcv_score, X=X, D=D, y=y, n=n)
+
+        score = partial(self._gcv_score, X=X, D=D, y=y)
         best = lambda grid: grid[jnp.argmin(jax.vmap(score)(grid))]
-        if log_lam is None: log_lam = best(jnp.linspace(*self.initial_log_lam_grid, self.lam_nvalues_init))
-        return best(jnp.linspace(log_lam - 1, log_lam + 1, self.lam_nvalues))
+
+        if prev_ll is None: 
+            grid = jnp.linspace(*self.initial_log_lam_grid, self.lam_nvalues_init)
+            ll = best(grid)
+            return ll
+
+        grid = jnp.linspace(prev_ll - 1, prev_ll + 1, self.lam_nvalues)
+        ll = best(grid)
+        return ll
 
     @staticmethod
-    @partial(jax.jit, static_argnames='n')
-    def _gcv_score(log_lam, X, D, y, n):
-        lam = 10.0 ** log_lam
-        Xa = jnp.concatenate([X, jnp.sqrt(lam) * D])
-        coefs, _ = ops.lstsq(Xa, y)
-        residuals = y[:2*n] - Xa[:2*n] @ coefs
+    @jax.jit
+    def _gcv_score(ll, X, D, y):
+        n = y.shape[0] - D.shape[0]
+
+        lam = 10.0 ** ll
+        X = jnp.concatenate([X, jnp.sqrt(lam) * D])
+
+        coefs = ops.lstsq(X, y)[0]
+        residuals = y[:n] - X[:n] @ coefs
         rss = jnp.sum(residuals**2)
-        Q = jnp.linalg.qr(Xa)[0]
-        df = jnp.sum(Q[:2*n]**2)
-        return (n * rss) / (n - df)**2
+
+        Q = jnp.linalg.qr(X)[0]
+        df = jnp.sum(Q[:n]**2)
+
+        score = (n/2 * rss) / (n/2 - df)**2
+        return score
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
         if self.use_smoothing: return Algorithm._determine_knots_even(z, self.splines_dof, self.splines_degree)
