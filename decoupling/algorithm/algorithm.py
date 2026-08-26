@@ -74,7 +74,7 @@ class Algorithm:
         self.lam_nvalues = lam_nvalues
 
         self.initial_log_lam_grid = (-6, 3) # initial log(lam) range
-        self.lam_tune_range = (-1, 1) # how many orders of magnitude to search at each iter > 0
+        self.lam_tune_range = (-0.5, +0.5) # how many orders of magnitude to search at each iter > 0
 
     @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
@@ -228,7 +228,8 @@ class Algorithm:
 
             if self.use_smoothing:
 
-                D = ops.second_difference_matrix(B.shape[1])
+                L = jnp.max(z) - jnp.min(z)
+                D = ops.second_difference_matrix(B.shape[1]) / L
 
                 ll = self._gcv_grid_search(A, y, D, prev_lls[rank])
                 new_lls.append(ll)
@@ -265,6 +266,7 @@ class Algorithm:
     @jax.jit
     def _gcv_score(ll, X, D, y):
         n = y.shape[0] - D.shape[0]
+        N = n / 2
 
         lam = 10.0 ** ll
         X = jnp.concatenate([X, jnp.sqrt(lam) * D])
@@ -277,6 +279,7 @@ class Algorithm:
         df = jnp.sum(Q[:n]**2)
 
         score = (rss / n) / (1 - (df / n))**2
+        #score = (rss / N) / (1 - (df / N))**2
         return score
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
