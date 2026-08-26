@@ -13,13 +13,10 @@ N = 100
 def target(x):
     a, b = x
     return jnp.array([
-        1000 * (a ** 3 + b ** 2 + a * b),   # deliberately ~1000x larger gradient
+        1000 * (a ** 3 + b ** 2 + a * b),
         b ** 3 + a ** 2 + a * b,
     ])
 
-# --------------------------------------------------------------------------- #
-# Fixtures: nothing heavy runs at import/collection time.
-# --------------------------------------------------------------------------- #
 @pytest.fixture(scope="module")
 def data():
     key = jax.random.key(0)
@@ -43,12 +40,8 @@ def fitted(data, scaled):
         ninits=3,
     )
     dec = algo.run(data["X"], scaled["Ys"], scaled["Js"])
-    print(algo.info.lambdas)
     return {"algo": algo, "decoupling": dec}
 
-# --------------------------------------------------------------------------- #
-# Sanity of the test setup itself.
-# --------------------------------------------------------------------------- #
 def test_dof_above_floor():
     # the minimum we established: dof >= degree + 1, else the basis is degenerate
     assert int(jnp.sqrt(N)) >= DEGREE + 1
@@ -70,9 +63,6 @@ def test_scale_is_invertible(data, scaled):
     J_round = scaled["Js"] * scaler.scaling_factors[:, None, None]
     assert jnp.allclose(J_round, data["J"], rtol=1e-5, atol=1e-6)
 
-# --------------------------------------------------------------------------- #
-# Core algorithm behaviour.
-# --------------------------------------------------------------------------- #
 def test_run_returns_finite_factors(fitted):
     dec = fitted["decoupling"]
     for name in ("W", "V", "H"):
@@ -91,10 +81,6 @@ def test_no_nan_in_error_history(fitted):
     errs = fitted["algo"].info.errors
     assert jnp.all(jnp.isfinite(errs)), "NaN/inf in error history -- seed blew up"
 
-# --------------------------------------------------------------------------- #
-# The unscale aliasing bug we discussed: .W and .factors[0] must agree,
-# and unscaling must not mutate-then-desync.
-# --------------------------------------------------------------------------- #
 def test_unscale_keeps_W_and_factors_consistent(fitted, scaled):
     dec = scaled["scaler"].unscale(fitted["decoupling"])
     assert jnp.allclose(dec.W, dec.factors[0]), (
@@ -108,9 +94,6 @@ def test_unscale_is_idempotent(fitted, scaled):
     twice = scaler.unscale(once)
     assert jnp.allclose(twice.W, W_once), "unscale applied twice changed W"
 
-# --------------------------------------------------------------------------- #
-# End-to-end: the loose functional bound (kept last, kept loose on purpose).
-# --------------------------------------------------------------------------- #
 def test_end_to_end_function_error(fitted, scaled, data):
     dec = scaled["scaler"].unscale(fitted["decoupling"])
     errors = jnp.asarray(function_error(target, dec, data["X"]))
@@ -118,4 +101,5 @@ def test_end_to_end_function_error(fitted, scaled, data):
     # gross failure, not subtle regressions -- those are covered by the property
     # tests above. If you want a tighter bound, anchor it to the SCALED error
     # (what the algorithm actually minimizes), not this unscaled function error.
+    print(errors)
     assert jnp.all(errors < 10.0)

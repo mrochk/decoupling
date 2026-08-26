@@ -19,7 +19,7 @@ class Algorithm:
 
     class Information(NamedTuple):
         ''' named tuple containing information about the best run'''
-        errors: Array  # cpd error for each iteration
+        errors: Array # cpd error at each iteration
         lambdas: Optional[Array] # smoothing terms for each internal
         rconds: dict[str, Array] # reciprocal condition numbers for each factor
 
@@ -37,7 +37,7 @@ class Algorithm:
         splines_degree: int = 3,
         use_smoothing: bool = True,
         lam_nvalues_init: int = 256,
-        lam_nvalues: int = 128,
+        lam_nvalues: int = 64,
         show_progress: bool = True,
     ):
         '''
@@ -73,7 +73,8 @@ class Algorithm:
         self.lam_nvalues_init = lam_nvalues_init
         self.lam_nvalues = lam_nvalues
 
-        self.initial_log_lam_grid = (-6, 3)
+        self.initial_log_lam_grid = (-6, 3) # initial log(lam) range
+        self.lam_tune_range = (-1, 1) # how many orders of magnitude to search at each iter > 0
 
     @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
@@ -106,7 +107,7 @@ class Algorithm:
     @jaxtyped(typechecker=beartype)
     def _run_once(
         self, 
-        i: int, 
+        seed: int, 
         key: Array, 
         inputs: X_dtype, 
         outputs: Y_dtype, 
@@ -125,7 +126,7 @@ class Algorithm:
 
         rconds = {'W': [], 'V': [], 'H': [], 'R': []}
 
-        bar = tqdm(range(self.niters), desc=f'[Seed {i+1}/{self.ninits}]', disable=not self.show_progress)
+        bar = tqdm(range(self.niters), desc=f'[Seed {seed+1}/{self.ninits}]', disable=not self.show_progress)
         for iteration in bar:
             if self.gamma > 0.0:
                 W, rcondW = ops.cmtf_lstsq(ops.khatri_rao(H, V), R, J0, outputs, self.gamma)
@@ -221,8 +222,9 @@ class Algorithm:
             knots = self._determine_knots(z)
 
             B, dB = design_matrices(z, knots, self.splines_degree)
-            A = jnp.vstack([dB, jnp.sqrt(self.gamma)*B])
-            y = jnp.concatenate([h, jnp.sqrt(self.gamma)*r])
+
+            A = jnp.vstack([dB, jnp.sqrt(self.gamma) * B])
+            y = jnp.concatenate([h, jnp.sqrt(self.gamma) * r])
 
             if self.use_smoothing:
 
@@ -234,7 +236,7 @@ class Algorithm:
                 A = jnp.concatenate([A, jnp.sqrt(10**ll) * D])
                 y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
 
-            coefs, _ = ops.lstsq(A, y)
+            coefs = ops.lstsq(A, y)[0]
             H, R = self._project(rank, coefs, B, dB, H, R)
 
             # return the coefs for fitting the internals later
@@ -254,7 +256,8 @@ class Algorithm:
             ll = best(grid)
             return ll
 
-        grid = jnp.linspace(prev_ll - 1, prev_ll + 1, self.lam_nvalues)
+        lo, hi = self.lam_tune_range
+        grid = jnp.linspace(prev_ll+lo, prev_ll+hi, self.lam_nvalues)
         ll = best(grid)
         return ll
 
@@ -273,7 +276,7 @@ class Algorithm:
         Q = jnp.linalg.qr(X)[0]
         df = jnp.sum(Q[:n]**2)
 
-        score = (n/2 * rss) / (n/2 - df)**2
+        score = (rss / n) / (1 - (df / n))**2
         return score
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
