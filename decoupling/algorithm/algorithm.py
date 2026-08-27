@@ -3,10 +3,9 @@ from tqdm import tqdm
 import jax, jax.numpy as jnp
 from beartype import beartype
 from functools import partial
+from bsplx import repeat_knots
 from beartype.typing import Tuple, NamedTuple, Optional
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
-
-from bsplx import repeat_knots
 
 from decoupling.types import *
 from decoupling import _ops as ops
@@ -15,10 +14,10 @@ from decoupling.result import Decoupling
 from decoupling._splines import design_matrices
 
 class Algorithm:
-    ''' tensor decoupling algorithm class '''
+    '''Tensor decoupling algorithm class.'''
 
     class Information(NamedTuple):
-        ''' named tuple containing information about the best run'''
+        '''Named tuple containing information about the best run.'''
         errors: Array # cpd error at each iteration
         lambdas: Optional[Array] # smoothing terms for each internal
         rconds: dict[str, Array] # reciprocal condition numbers for each factor
@@ -37,7 +36,7 @@ class Algorithm:
         splines_degree: int = 3,
         knots: str = 'quantile',
         use_smoothing: bool = True,
-        smoothing_grid: ArrayLike = jnp.linspace(-3, 6, num=256),
+        smoothing_grid: ArrayLike = jnp.linspace(-3, 6, num=2048),
         show_progress: bool = True,
     ):
         '''
@@ -77,7 +76,7 @@ class Algorithm:
 
     @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
-        ''' compute the decoupling representation of target given function inputs, outputs and jacobians '''
+        '''Compute the decoupled representation of target given inputs, outputs and Jacobians.'''
 
         if self.splines_dof is None:
             self.splines_dof = max(self.splines_degree+1, int(jnp.sqrt(2*inputs.shape[0])))
@@ -226,12 +225,12 @@ class Algorithm:
 
             if self.use_smoothing:
                 D = ops.second_difference_matrix(B.shape[1])
-                ll = self._gcv_grid_search(A, y, D)
+                n_eff = (A.shape[0] / 2) * (1.0 + self.gamma)
+                (ll, coefs, scores) = Algorithm.gcv_path(A, y, D, self.smoothing_grid, n_eff)
                 lambdas.append(ll)
-                A = jnp.concatenate([A, jnp.sqrt(10**ll) * D])
-                y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
+            else:
+                coefs = ops.lstsq(A, y)[0]
 
-            coefs = ops.lstsq(A, y)[0]
             H, R = self._project(rank, coefs, B, dB, H, R)
 
             # return the coefs for fitting the internals later
@@ -240,25 +239,47 @@ class Algorithm:
 
         return H, R, (coefs_out, knots_out), lambdas
 
-    @jax.jit(static_argnums=0)
-    def _gcv_grid_search(self, X, y, D) -> Array:
-        y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
-        N = ((y.shape[0] - D.shape[0]) / 2) * (1.0 + self.gamma) # effective number of samples
-        score = partial(self._gcv_score, X=X, D=D, y=y, N=N)
-        best = lambda grid: grid[jnp.argmin(jax.vmap(score)(grid))]
-        return best(self.smoothing_grid)
-
     @staticmethod
     @jax.jit
-    def _gcv_score(ll, X, D, y, N):
-        n = y.shape[0] - D.shape[0]
-        X = jnp.concatenate([X, jnp.sqrt(10**ll) * D])
-        coefs = ops.lstsq(X, y)[0]
-        residuals = y[:n] - X[:n] @ coefs
-        rss = jnp.sum(residuals**2)
-        Q = jnp.linalg.qr(X)[0]
-        df = jnp.sum(Q[:n]**2)
-        return (rss / N) / (1 - (df / N))**2
+    def gcv_path(A, y, D, grid, N):
+
+        n, p = A.shape
+
+        M = jnp.concatenate([A, D], axis=0)
+        Qm, Rm = jnp.linalg.qr(M)
+        Um, s, Vmt = jnp.linalg.svd(Rm)
+
+        tol = jnp.finfo(A.dtype).eps * max(M.shape) * s[0]
+        keep = s > tol
+        inv_s = jnp.where(keep, 1.0 / jnp.where(keep, s, 1.0), 0.0)
+
+        X = Qm[:n] @ jnp.where(keep[None, :], Um, 0.0)  # A @ pinv factor, sv <= 1
+
+        Qx, Rx = jnp.linalg.qr(X)
+        Ux, c, Wt = jnp.linalg.svd(Rx)
+
+        f = Ux.T @ (Qx.T @ y)
+        r0 = y - Qx @ (Ux @ f)
+        rss0 = r0 @ r0
+
+        c2 = jnp.clip(c * c, 0.0, 1.0)
+        d2 = 1.0 - c2
+
+        lam = jnp.power(10.0, grid)[:, None]
+        denom = c2 + lam * d2
+        rss = rss0 + jnp.sum((f * (lam * d2) / denom) ** 2, axis=1)
+        dof = jnp.sum(c2 / denom, axis=1)
+
+        scores = (rss / N) / (1.0 - dof / N) ** 2
+        scores = jnp.where(jnp.isfinite(scores) & (dof < N), scores, jnp.inf)
+
+        best = jnp.argmin(scores)
+        ll = grid[best]
+
+        a = c * f / denom[best]
+        coefs = (Vmt.T * inv_s) @ (Wt.T @ a)
+
+        return ll, coefs, scores
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
         match self.knots:
