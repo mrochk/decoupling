@@ -4,7 +4,7 @@ import jax, jax.numpy as jnp
 from beartype import beartype
 from functools import partial
 from beartype.typing import Tuple, NamedTuple, Optional
-from jaxtyping import jaxtyped, Float, Array
+from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
 from bsplx import repeat_knots
 
@@ -35,12 +35,10 @@ class Algorithm:
         gamma: float = 0.1,
         splines_dof: Optional[int] = None,
         splines_degree: int = 3,
-        use_smoothing: bool = True,
         knots: str = 'quantile',
-        lam_nvalues: int = 10,
+        use_smoothing: bool = True,
+        smoothing_grid: ArrayLike = jnp.linspace(-3, 6, num=256),
         show_progress: bool = True,
-        initial_lam_grid: Tuple[float, float] = (-6.0, 3.0),
-        lam_tune_range: Tuple[float, float] = (-0.5, +0.5),
     ):
         '''
         Args:
@@ -51,12 +49,10 @@ class Algorithm:
             ninits (int): number of runs to try from different seeds derived from key 
             gamma (float): weight of zeroth-order information in cmtf objective 
             splines_degree (int): splines degree (default=3) 
-            use_smoothing (bool): whether to use P-splines or B-splines 
             knots (str): the knots placement to use ['quantile' or 'even']
-            lam_nvalues (int): is `use_smoothing` is true, how many lambdas to search for 
+            use_smoothing (bool): whether to use P-splines or B-splines 
+            smoothing_grid (ArrayLike): the grid of lambda values to search for, in log space 
             show_progress (bool): whether to show the progress bar 
-            initial_lam_grid (Tuple[float, float]): default log10(lam) search grid
-            lam_tune_range (Tuple[float, float]): how the log10(lam) grid should be increased at each iteration
         '''
 
         assert all(map(lambda x: x > 0, [rank, ninits, niters, splines_degree]))
@@ -74,12 +70,10 @@ class Algorithm:
         self.gamma = jnp.asarray(gamma)
         self.splines_dof = splines_dof
         self.splines_degree = splines_degree
-        self.show_progress = show_progress
-        self.use_smoothing = use_smoothing
         self.knots = knots
-        self.lam_nvalues = lam_nvalues
-        self.initial_lam_grid = initial_lam_grid
-        self.lam_tune_range = lam_tune_range
+        self.use_smoothing = use_smoothing
+        self.smoothing_grid = ops.convert_array(smoothing_grid)
+        self.show_progress = show_progress
 
     @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
@@ -150,7 +144,7 @@ class Algorithm:
             min_rcond = min(rcondW, rcondV, rcondH, rcondR)
             if min_rcond < 1e-12: warnings.warn(f'min_rcond={min_rcond:.1e} is lower than 1e-12')
 
-            H, R, (coefs, knots), log_lams = self._projection(H, R, inputs @ V, log_lams)
+            H, R, (coefs, knots), log_lams = self._projection(H, R, inputs@V)
 
             error = cpd_error(jacobians, (W, V, H))
             errors.append(error)
@@ -205,10 +199,10 @@ class Algorithm:
         return (H, R)
 
     @jaxtyped(typechecker=beartype)
-    def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r'], prev_lls) -> Tuple:
+    def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r']) -> Tuple:
 
         coefs_out, knots_out = [], []
-        new_lls = []
+        lambdas = []
 
         for rank in range(H.shape[1]):
             z, h, r = Z[:, rank], H[:, rank], R[:, rank]
@@ -220,7 +214,7 @@ class Algorithm:
                 H = H.at[:, rank].set(jnp.zeros_like(H[:, rank]))
                 R = R.at[:, rank].set(jnp.zeros_like(R[:, rank]))
                 coefs_out.append(None); knots_out.append(None)
-                if self.use_smoothing: new_lls.append(None)
+                if self.use_smoothing: lambdas.append(None)
                 continue
 
             knots = self._determine_knots(z)
@@ -231,12 +225,9 @@ class Algorithm:
             y = jnp.concatenate([h, jnp.sqrt(self.gamma) * r])
 
             if self.use_smoothing:
-
                 D = ops.second_difference_matrix(B.shape[1])
-
-                ll = self._gcv_grid_search(A, y, D, prev_lls[rank])
-                new_lls.append(ll)
-
+                ll = self._gcv_grid_search(A, y, D)
+                lambdas.append(ll)
                 A = jnp.concatenate([A, jnp.sqrt(10**ll) * D])
                 y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
 
@@ -247,43 +238,27 @@ class Algorithm:
             coefs_out.append(coefs)
             knots_out.append(knots)
 
-        return H, R, (coefs_out, knots_out), new_lls
+        return H, R, (coefs_out, knots_out), lambdas
 
-    def _gcv_grid_search(self, X, y, D, prev_ll) -> Array:
+    @jax.jit(static_argnums=0)
+    def _gcv_grid_search(self, X, y, D) -> Array:
         y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
-
-        N = ((y.shape[0] - D.shape[0]) / 2) * (1.0 + self.gamma) # effective number of points
-
+        N = ((y.shape[0] - D.shape[0]) / 2) * (1.0 + self.gamma) # effective number of samples
         score = partial(self._gcv_score, X=X, D=D, y=y, N=N)
         best = lambda grid: grid[jnp.argmin(jax.vmap(score)(grid))]
-
-        if prev_ll is None: 
-            grid = jnp.linspace(*self.initial_lam_grid, self.lam_nvalues)
-            ll = best(grid)
-            return ll
-
-        lo, hi = self.lam_tune_range
-        grid = jnp.linspace(prev_ll+lo, prev_ll+hi, self.lam_nvalues)
-        ll = best(grid)
-        return ll
+        return best(self.smoothing_grid)
 
     @staticmethod
     @jax.jit
     def _gcv_score(ll, X, D, y, N):
         n = y.shape[0] - D.shape[0]
-
-        lam = 10.0 ** ll
-        X = jnp.concatenate([X, jnp.sqrt(lam) * D])
-
+        X = jnp.concatenate([X, jnp.sqrt(10**ll) * D])
         coefs = ops.lstsq(X, y)[0]
         residuals = y[:n] - X[:n] @ coefs
         rss = jnp.sum(residuals**2)
-
         Q = jnp.linalg.qr(X)[0]
         df = jnp.sum(Q[:n]**2)
-
-        score = (rss / N) / (1 - (df / N))**2
-        return score
+        return (rss / N) / (1 - (df / N))**2
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
         match self.knots:
