@@ -30,15 +30,17 @@ class Algorithm:
         self,
         rank: int,
         key: Array,
-        niters: int = 100,
+        niters: int = 20,
         ninits: int = 1,
         gamma: float = 0.1,
         splines_dof: Optional[int] = None,
         splines_degree: int = 3,
         use_smoothing: bool = True,
-        lam_nvalues_init: int = 256,
-        lam_nvalues: int = 64,
+        knots: str = 'quantile',
+        lam_nvalues: int = 10,
         show_progress: bool = True,
+        initial_lam_grid: Tuple[float, float] = (-6.0, 3.0),
+        lam_tune_range: Tuple[float, float] = (-0.5, +0.5),
     ):
         '''
         Args:
@@ -61,6 +63,8 @@ class Algorithm:
         if splines_dof is not None and splines_dof < splines_degree + 1:
             raise ValueError(f'dof ({splines_dof}) must be >= degree + 1 ({splines_degree + 1})')
 
+        assert knots in {'even', 'quantile'}
+
         self.rank = rank
         self.niters = niters
         self.ninits = ninits 
@@ -70,11 +74,10 @@ class Algorithm:
         self.splines_degree = splines_degree
         self.show_progress = show_progress
         self.use_smoothing = use_smoothing
-        self.lam_nvalues_init = lam_nvalues_init
+        self.knots = knots
         self.lam_nvalues = lam_nvalues
-
-        self.initial_log_lam_grid = (-6, 3) # initial log(lam) range
-        self.lam_tune_range = (-0.5, +0.5) # how many orders of magnitude to search at each iter > 0
+        self.initial_lam_grid = initial_lam_grid
+        self.lam_tune_range = lam_tune_range
 
     @jaxtyped(typechecker=beartype)
     def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
@@ -128,8 +131,7 @@ class Algorithm:
 
         bar = tqdm(range(self.niters), desc=f'[Seed {seed+1}/{self.ninits}]', disable=not self.show_progress)
         for iteration in bar:
-            if self.gamma > 0.0:
-                W, rcondW = ops.cmtf_lstsq(ops.khatri_rao(H, V), R, J0, outputs, self.gamma)
+            if self.gamma > 0.0: W, rcondW = ops.cmtf_lstsq(ops.khatri_rao(H, V), R, J0, outputs, self.gamma)
             else: W, rcondW = ops.lstsq(ops.khatri_rao(H, V), J0)
 
             V, rcondV = ops.lstsq(ops.khatri_rao(H, W), J1)
@@ -228,8 +230,7 @@ class Algorithm:
 
             if self.use_smoothing:
 
-                L = jnp.max(z) - jnp.min(z)
-                D = ops.second_difference_matrix(B.shape[1]) / L
+                D = ops.second_difference_matrix(B.shape[1])
 
                 ll = self._gcv_grid_search(A, y, D, prev_lls[rank])
                 new_lls.append(ll)
@@ -255,7 +256,7 @@ class Algorithm:
         best = lambda grid: grid[jnp.argmin(jax.vmap(score)(grid))]
 
         if prev_ll is None: 
-            grid = jnp.linspace(*self.initial_log_lam_grid, self.lam_nvalues_init)
+            grid = jnp.linspace(*self.initial_lam_grid, self.lam_nvalues)
             ll = best(grid)
             return ll
 
@@ -283,8 +284,10 @@ class Algorithm:
         return score
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
-        if self.use_smoothing: return Algorithm._determine_knots_even(z, self.splines_dof, self.splines_degree)
-        return Algorithm._determine_knots_quantiles(z, self.splines_dof, self.splines_degree)
+        match self.knots:
+            case 'even': return Algorithm._determine_knots_even(z, self.splines_dof, self.splines_degree)
+            case 'quantile': return Algorithm._determine_knots_quantiles(z, self.splines_dof, self.splines_degree)
+            case _: raise ValueError()
 
     @staticmethod
     @jax.jit(static_argnames=('dof', 'degree'))
@@ -294,22 +297,13 @@ class Algorithm:
         return repeat_knots(knots, degree)
 
     @staticmethod
-    @jax.jit(static_argnames=('dof', 'degree'))
-    def _determine_knots_quantiles(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
+    @partial(jax.jit, static_argnames=('dof', 'degree'))
+    def _determine_knots_quantiles(u, dof: int, degree: int, alpha: float = 0.8) -> Array:
         internals = dof - degree + 1
-
         qs = jnp.linspace(0, 1, internals)
-        knots = jnp.quantile(u, qs)
-        knots = jax.vmap(partial(Algorithm._closest, u=u))(knots)
-        return repeat_knots(knots, degree)
 
-    @staticmethod
-    @jax.jit
-    def _closest(knot, u):
-        def forloop(i, args):
-            min_dist, closest_x = args
-            x = u[i]
-            dist = jnp.abs(x - knot)
-            return jax.lax.cond(dist < min_dist, lambda: (dist, x), lambda: (min_dist, closest_x))
-        _, closest_point = jax.lax.fori_loop(0, len(u), forloop, (jnp.inf, u[0]))
-        return closest_point
+        knots_q = jnp.quantile(u, qs)
+        knots_u = jnp.linspace(jnp.min(u), jnp.max(u), internals)
+
+        knots = alpha * knots_q + (1.0 - alpha) * knots_u
+        return repeat_knots(knots, degree)
