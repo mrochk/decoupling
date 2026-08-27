@@ -249,7 +249,9 @@ class Algorithm:
     def _gcv_grid_search(self, X, y, D, prev_ll) -> Array:
         y = jnp.concatenate([y, jnp.zeros(D.shape[0])])
 
-        score = partial(self._gcv_score, X=X, D=D, y=y)
+        N = ((y.shape[0] - D.shape[0]) / 2) * (1.0 + self.gamma) # effective number of points
+
+        score = partial(self._gcv_score, X=X, D=D, y=y, N=N)
         best = lambda grid: grid[jnp.argmin(jax.vmap(score)(grid))]
 
         if prev_ll is None: 
@@ -264,9 +266,8 @@ class Algorithm:
 
     @staticmethod
     @jax.jit
-    def _gcv_score(ll, X, D, y):
+    def _gcv_score(ll, X, D, y, N):
         n = y.shape[0] - D.shape[0]
-        N = n / 2
 
         lam = 10.0 ** ll
         X = jnp.concatenate([X, jnp.sqrt(lam) * D])
@@ -278,8 +279,7 @@ class Algorithm:
         Q = jnp.linalg.qr(X)[0]
         df = jnp.sum(Q[:n]**2)
 
-        score = (rss / n) / (1 - (df / n))**2
-        #score = (rss / N) / (1 - (df / N))**2
+        score = (rss / N) / (1 - (df / N))**2
         return score
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
