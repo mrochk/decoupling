@@ -52,9 +52,11 @@ class Algorithm:
             gamma (float): weight of zeroth-order information in cmtf objective 
             splines_degree (int): splines degree (default=3) 
             use_smoothing (bool): whether to use P-splines or B-splines 
-            lam_nvalues_init (int): is use_smoothing is true, how many lambdas to try at iter 0 
-            lam_nvalues (int): is use_smoothing is true, how many lambdas to try at iter > 0 
+            knots (str): the knots placement to use ['quantile' or 'even']
+            lam_nvalues (int): is `use_smoothing` is true, how many lambdas to search for 
             show_progress (bool): whether to show the progress bar 
+            initial_lam_grid (Tuple[float, float]): default log10(lam) search grid
+            lam_tune_range (Tuple[float, float]): how the log10(lam) grid should be increased at each iteration
         '''
 
         assert all(map(lambda x: x > 0, [rank, ninits, niters, splines_degree]))
