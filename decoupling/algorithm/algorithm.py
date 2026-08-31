@@ -2,7 +2,6 @@ import warnings
 from tqdm import tqdm
 import jax, jax.numpy as jnp
 from beartype import beartype
-from functools import partial
 from bsplx import repeat_knots
 from beartype.typing import Tuple, NamedTuple, Optional
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
@@ -47,6 +46,7 @@ class Algorithm:
             key (Array): jax random seed 
             ninits (int): number of runs to try from different seeds derived from key 
             gamma (float): weight of zeroth-order information in cmtf objective 
+            splines_dof (int): splines degrees of freedom (default=sqrt{2N}) 
             splines_degree (int): splines degree (default=3) 
             knots (str): the knots placement to use ['quantile' or 'even']
             use_smoothing (bool): whether to use P-splines or B-splines 
@@ -225,11 +225,10 @@ class Algorithm:
 
             if self.use_smoothing:
                 D = ops.second_difference_matrix(B.shape[1])
-                n_eff = (A.shape[0] / 2) * (1.0 + self.gamma)
-                (ll, coefs, scores) = Algorithm.gcv_path(A, y, D, self.smoothing_grid, n_eff)
-                lambdas.append(ll)
-            else:
-                coefs = ops.lstsq(A, y)[0]
+                Neff = (A.shape[0] / 2) * (1.0 + self.gamma)
+                (ll, coefs) = Algorithm.gcv_demmler_reinsch(A, y, D, self.smoothing_grid, jnp.asarray(Neff))
+                lambdas.append(10**ll)
+            else: coefs = ops.lstsq(A, y)[0]
 
             H, R = self._project(rank, coefs, B, dB, H, R)
 
@@ -241,11 +240,11 @@ class Algorithm:
 
     @staticmethod
     @jax.jit
-    def gcv_path(A, y, D, grid, N):
+    def gcv_demmler_reinsch(A: Array, y: Array, D: Array, grid: Array, N: Array):
+        n, _ = A.shape
 
-        n, p = A.shape
+        M = jnp.concatenate([A, D], axis=0) # invertible matrix that contains D
 
-        M = jnp.concatenate([A, D], axis=0)
         Qm, Rm = jnp.linalg.qr(M)
         Um, s, Vmt = jnp.linalg.svd(Rm)
 
@@ -253,7 +252,7 @@ class Algorithm:
         keep = s > tol
         inv_s = jnp.where(keep, 1.0 / jnp.where(keep, s, 1.0), 0.0)
 
-        X = Qm[:n] @ jnp.where(keep[None, :], Um, 0.0)  # A @ pinv factor, sv <= 1
+        X = Qm[:n] @ jnp.where(keep[None, :], Um, 0.0)
 
         Qx, Rx = jnp.linalg.qr(X)
         Ux, c, Wt = jnp.linalg.svd(Rx)
@@ -279,7 +278,7 @@ class Algorithm:
         a = c * f / denom[best]
         coefs = (Vmt.T * inv_s) @ (Wt.T @ a)
 
-        return ll, coefs, scores
+        return (ll, coefs)
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
         match self.knots:
@@ -295,7 +294,7 @@ class Algorithm:
         return repeat_knots(knots, degree)
 
     @staticmethod
-    @partial(jax.jit, static_argnames=('dof', 'degree'))
+    @jax.jit(static_argnames=('dof', 'degree'))
     def _determine_knots_quantiles(u, dof: int, degree: int, alpha: float = 0.8) -> Array:
         internals = dof - degree + 1
         qs = jnp.linspace(0, 1, internals)
