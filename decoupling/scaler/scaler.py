@@ -1,4 +1,4 @@
-import jax, jax.numpy as jnp
+import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import jaxtyped, Float, Array

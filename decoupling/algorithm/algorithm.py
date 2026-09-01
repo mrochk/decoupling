@@ -41,9 +41,8 @@ class Algorithm:
         '''
         Args:
             rank (int): rank of the decomposition (number of internals) 
-            niters (int): number of iterations 
-            splines_dof (int): splines (internals) degrees of freedom 
             key (Array): jax random seed 
+            niters (int): number of iterations (recommended: [10-100]) 
             ninits (int): number of runs to try from different seeds derived from key 
             gamma (float): weight of zeroth-order information in cmtf objective 
             splines_dof (int): splines degrees of freedom (default=sqrt{2N}) 
@@ -60,7 +59,7 @@ class Algorithm:
         if splines_dof is not None and splines_dof < splines_degree + 1:
             raise ValueError(f'dof ({splines_dof}) must be >= degree + 1 ({splines_degree + 1})')
 
-        assert knots in {'even', 'quantile'}
+        if knots not in {'even', 'quantile'}: raise ValueError(self.knots)
 
         self.rank = rank
         self.niters = niters
@@ -225,8 +224,8 @@ class Algorithm:
 
             if self.use_smoothing:
                 D = ops.second_difference_matrix(B.shape[1])
-                Neff = (A.shape[0] / 2) * (1.0 + self.gamma)
-                (ll, coefs) = Algorithm.gcv_demmler_reinsch(A, y, D, self.smoothing_grid, jnp.asarray(Neff))
+                N_eff = (A.shape[0] / 2) * (1.0 + self.gamma)
+                (ll, coefs) = Algorithm._gcv_demmler_reinsch(A, y, D, self.smoothing_grid, jnp.asarray(N_eff))
                 lambdas.append(10**ll)
             else: coefs = ops.lstsq(A, y)[0]
 
@@ -240,7 +239,7 @@ class Algorithm:
 
     @staticmethod
     @jax.jit
-    def gcv_demmler_reinsch(A: Array, y: Array, D: Array, grid: Array, N: Array):
+    def _gcv_demmler_reinsch(A: Array, y: Array, D: Array, grid: Array, N: Array):
         n, _ = A.shape
 
         M = jnp.concatenate([A, D], axis=0) # invertible matrix that contains D
@@ -284,7 +283,7 @@ class Algorithm:
         match self.knots:
             case 'even': return Algorithm._determine_knots_even(z, self.splines_dof, self.splines_degree)
             case 'quantile': return Algorithm._determine_knots_quantiles(z, self.splines_dof, self.splines_degree)
-            case _: raise ValueError()
+            case _: raise ValueError(self.knots)
 
     @staticmethod
     @jax.jit(static_argnames=('dof', 'degree'))
