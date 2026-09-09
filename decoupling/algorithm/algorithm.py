@@ -33,7 +33,7 @@ class Algorithm:
         gamma: float = 0.1,
         splines_dof: Optional[int] = None,
         splines_degree: int = 3,
-        knots_blend: float = 0.5,
+        knots_blend: float = 1.0,
         use_smoothing: bool = True,
         smoothing_grid: ArrayLike = jnp.linspace(-3, 6, num=2048),
         show_progress: bool = True,
