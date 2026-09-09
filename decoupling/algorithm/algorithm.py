@@ -33,7 +33,7 @@ class Algorithm:
         gamma: float = 0.1,
         splines_dof: Optional[int] = None,
         splines_degree: int = 3,
-        knots: str = 'quantile',
+        knots_blend: float = 0.5,
         use_smoothing: bool = True,
         smoothing_grid: ArrayLike = jnp.linspace(-3, 6, num=2048),
         show_progress: bool = True,
@@ -47,7 +47,7 @@ class Algorithm:
             gamma (float): weight of zeroth-order information in cmtf objective 
             splines_dof (int): splines degrees of freedom (default=sqrt{2N}) 
             splines_degree (int): splines degree (default=3) 
-            knots (str): the knots placement to use ['quantile' or 'even']
+            knots_blend (float): controls the quantile/uniform knots interpolation where 1 = pure quantile knots and 0 = evenly spaced knots
             use_smoothing (bool): whether to use P-splines or B-splines 
             smoothing_grid (ArrayLike): the grid of lambda values to search for, in log space 
             show_progress (bool): whether to show the progress bar 
@@ -59,7 +59,7 @@ class Algorithm:
         if splines_dof is not None and splines_dof < splines_degree + 1:
             raise ValueError(f'dof ({splines_dof}) must be >= degree + 1 ({splines_degree + 1})')
 
-        if knots not in {'even', 'quantile'}: raise ValueError(self.knots)
+        assert 0.0 <= knots_blend <= 1.0
 
         self.rank = rank
         self.niters = niters
@@ -68,7 +68,7 @@ class Algorithm:
         self.gamma = jnp.asarray(gamma)
         self.splines_dof = splines_dof
         self.splines_degree = splines_degree
-        self.knots = knots
+        self.knots_blend = knots_blend
         self.use_smoothing = use_smoothing
         self.smoothing_grid = ops.convert_array(smoothing_grid)
         self.show_progress = show_progress
@@ -280,26 +280,16 @@ class Algorithm:
         return (ll, coefs)
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
-        match self.knots:
-            case 'even': return Algorithm._determine_knots_even(z, self.splines_dof, self.splines_degree)
-            case 'quantile': return Algorithm._determine_knots_quantiles(z, self.splines_dof, self.splines_degree)
-            case _: raise ValueError(self.knots)
+        return Algorithm._determine_knots_jit(z, self.splines_dof, self.splines_degree, self.knots_blend)
 
     @staticmethod
     @jax.jit(static_argnames=('dof', 'degree'))
-    def _determine_knots_even(u: Float[Array, 'r'], dof: int, degree: int) -> Array:
-        internals = dof - degree + 1
-        knots = jnp.linspace(jnp.min(u), jnp.max(u), internals)
-        return repeat_knots(knots, degree)
-
-    @staticmethod
-    @jax.jit(static_argnames=('dof', 'degree'))
-    def _determine_knots_quantiles(u, dof: int, degree: int, alpha: float = 0.8) -> Array:
+    def _determine_knots_jit(z, dof: int, degree: int, blend: float) -> Array:
         internals = dof - degree + 1
         qs = jnp.linspace(0, 1, internals)
 
-        knots_q = jnp.quantile(u, qs)
-        knots_u = jnp.linspace(jnp.min(u), jnp.max(u), internals)
+        knots_q = jnp.quantile(z, qs)
+        knots_u = jnp.linspace(jnp.min(z), jnp.max(z), internals)
 
-        knots = alpha * knots_q + (1.0 - alpha) * knots_u
+        knots = blend * knots_q + (1.0 - blend) * knots_u
         return repeat_knots(knots, degree)
