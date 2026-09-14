@@ -46,11 +46,17 @@ def cpd_error(tensor: J_dtype, factors: factors_dtype, weights: Optional[Float[A
     _tensor = cpd_reconstruct(factors, weights)
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)
 
+@jax.jit
 @jaxtyped(typechecker=beartype)
-def function_error(target: Callable, decoupling: Decoupling, inputs: X_dtype) -> Float[Array, 'n']:
+def function_error(Y_true: Y_dtype, Y_pred: Y_dtype) -> Float[Array, 'n']:
     ''' compute the per-output error between target function and decoupling '''
-    Y_target = jax.vmap(target)(inputs)
-    Y_decoupling = jax.vmap(decoupling)(inputs)
-    top = jnp.sqrt(jnp.mean((Y_target - Y_decoupling)**2, axis=0))
-    bot = jnp.sqrt(jnp.mean((Y_target - jnp.mean(Y_target, axis=0))**2, axis=0))
+    top = jnp.sqrt(jnp.mean((Y_true - Y_pred)**2, axis=0))
+    bot = jnp.sqrt(jnp.mean((Y_true - jnp.mean(Y_true, axis=0))**2, axis=0))
     return top / bot * 100
+
+@jaxtyped(typechecker=beartype)
+def function_error_from_callable(target: Callable, decoupling: Decoupling, X: X_dtype) -> Float[Array, 'n']:
+    ''' compute the per-output error between target function and decoupling '''
+    Y_true = jax.vmap(target)(X)
+    Y_pred = jax.vmap(decoupling)(X)
+    return function_error(Y_true, Y_pred)

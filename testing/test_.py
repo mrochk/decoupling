@@ -4,7 +4,7 @@ import pytest
 
 from decoupling import Algorithm
 from decoupling.scaler import JacobianScaler
-from decoupling.utils import collect_information_from_random, function_error
+from decoupling.utils import collect_information_from_random, function_error_from_callable
 
 DEGREE = 3
 RANK = 4
@@ -96,7 +96,7 @@ def test_unscale_is_idempotent(fitted, scaled):
 
 def test_end_to_end_function_error(fitted, scaled, data):
     dec = scaled["scaler"].unscale(fitted["decoupling"])
-    errors = jnp.asarray(function_error(target, dec, data["X"]))
+    errors = jnp.asarray(function_error_from_callable(target, dec, data["X"]))
     # Loose sanity bound: this is the WEAKEST assertion in the suite. It catches
     # gross failure, not subtle regressions -- those are covered by the property
     # tests above. If you want a tighter bound, anchor it to the SCALED error
