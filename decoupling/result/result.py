@@ -7,6 +7,8 @@ from decoupling.types import *
 from decoupling._splines import design_matrix
 
 class Decoupling:
+    '''Callable decoupled representation, returned by `Algorithm.run()`.'''
+
     rank: int
 
     W: W_dtype 

@@ -35,7 +35,7 @@ class Algorithm:
         splines_degree: int = 3,
         knots_blend: float = 1.0,
         use_smoothing: bool = True,
-        smoothing_grid: ArrayLike = jnp.linspace(-3, 6, num=2048),
+        smoothing_grid: ArrayLike = jnp.linspace(0.0, 1000.0, num=512),
         show_progress: bool = True,
     ):
         '''
@@ -49,7 +49,7 @@ class Algorithm:
             splines_degree (int): splines degree (default=3) 
             knots_blend (float): controls the quantile/uniform knots interpolation where 1 = pure quantile knots and 0 = evenly spaced knots
             use_smoothing (bool): whether to use P-splines or B-splines 
-            smoothing_grid (ArrayLike): the grid of lambda values to search for, in log space 
+            smoothing_grid (ArrayLike): the grid of lambda values to search for 
             show_progress (bool): whether to show the progress bar 
         '''
 
@@ -225,8 +225,9 @@ class Algorithm:
             if self.use_smoothing:
                 D = ops.second_difference_matrix(B.shape[1])
                 N_eff = (A.shape[0] / 2) * (1.0 + self.gamma)
-                (ll, coefs) = Algorithm._gcv_demmler_reinsch(A, y, D, self.smoothing_grid, jnp.asarray(N_eff))
-                lambdas.append(10**ll)
+                (lam, coefs) = Algorithm._gcv_demmler_reinsch(
+                    A, y, D, self.smoothing_grid, jnp.asarray(N_eff))
+                lambdas.append(lam)
             else: coefs = ops.lstsq(A, y)[0]
 
             H, R = self._project(rank, coefs, B, dB, H, R)
@@ -263,7 +264,7 @@ class Algorithm:
         c2 = jnp.clip(c * c, 0.0, 1.0)
         d2 = 1.0 - c2
 
-        lam = jnp.power(10.0, grid)[:, None]
+        lam = grid[:, None]
         denom = c2 + lam * d2
         rss = rss0 + jnp.sum((f * (lam * d2) / denom) ** 2, axis=1)
         dof = jnp.sum(c2 / denom, axis=1)
@@ -272,12 +273,12 @@ class Algorithm:
         scores = jnp.where(jnp.isfinite(scores) & (dof < N), scores, jnp.inf)
 
         best = jnp.argmin(scores)
-        ll = grid[best]
+        lam = grid[best]
 
         a = c * f / denom[best]
         coefs = (Vmt.T * inv_s) @ (Wt.T @ a)
 
-        return (ll, coefs)
+        return (lam, coefs)
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
         return Algorithm._determine_knots_jit(z, self.splines_dof, self.splines_degree, self.knots_blend)

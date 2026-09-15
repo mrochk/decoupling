@@ -26,7 +26,7 @@ def collect_information_from_random(
 
 @jaxtyped(typechecker=beartype)
 def collect_information_from_inputs(function: Callable, inputs: X_dtype)-> Tuple[X_dtype, Y_dtype, J_dtype]:
-    ''' return inputs, outputs and jacobians '''
+    '''Collect inputs, outputs and jacobians.'''
     assert callable(function)
     jacobian = jax.jit(jax.vmap(jax.jacobian(function)))
     function = jax.jit(jax.vmap(function))
@@ -35,28 +35,28 @@ def collect_information_from_inputs(function: Callable, inputs: X_dtype)-> Tuple
 
 @jaxtyped(typechecker=beartype)
 def cpd_reconstruct(factors: factors_dtype, weights: Optional[Float[Array, 'r']] = None) -> J_dtype:
-    ''' calls jit-compiled ops.reconstruct '''
+    '''Calls jit-compiled `ops.reconstruct`.'''
     rank = factors[0].shape[1]
     if weights is None: weights = jnp.ones(rank)
     return ops.reconstruct(*factors, weights)
 
 @jaxtyped(typechecker=beartype)
 def cpd_error(tensor: J_dtype, factors: factors_dtype, weights: Optional[Float[Array, 'r']] = None) -> Float[Array, '']:
-    ''' compute the cpd error from target tensor, factors and weights '''
+    '''Compute the cpd-error from target tensor, factors and weights.'''
     _tensor = cpd_reconstruct(factors, weights)
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
 def function_error(Y_true: Y_dtype, Y_pred: Y_dtype) -> Float[Array, 'n']:
-    ''' compute the per-output error between target function and decoupling '''
+    '''Compute the per-output error between targets and predictions.'''
     top = jnp.sqrt(jnp.mean((Y_true - Y_pred)**2, axis=0))
     bot = jnp.sqrt(jnp.mean((Y_true - jnp.mean(Y_true, axis=0))**2, axis=0))
     return top / bot * 100
 
 @jaxtyped(typechecker=beartype)
 def function_error_from_callable(target: Callable, decoupling: Decoupling, X: X_dtype) -> Float[Array, 'n']:
-    ''' compute the per-output error between target function and decoupling '''
+    '''Compute the per-output error between target function and decoupling using samples `X`.'''
     Y_true = jax.vmap(target)(X)
     Y_pred = jax.vmap(decoupling)(X)
     return function_error(Y_true, Y_pred)

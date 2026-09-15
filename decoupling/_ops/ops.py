@@ -7,26 +7,26 @@ from decoupling.types import W_dtype, V_dtype, H_dtype, J_dtype
 
 @jaxtyped(typechecker=beartype)
 def convert_array(array: ArrayLike) -> Array:
-    ''' convert an array-like to jax float32 array if it's not already '''
+    '''Convert an array-like to jax float32 array if it isn't already.'''
     return jnp.asarray(array, dtype=jnp.result_type(array, jnp.float32))
 
 @jax.jit(static_argnames='mode')
 @jaxtyped(typechecker=beartype)
 def unfold_kolda(tensor: Array, mode: int) -> Array:
-    ''' tensor unfolding as defined by Kolda & Bader '''
+    '''Tensor unfolding as defined by Kolda & Bader.'''
     return jnp.reshape(jnp.moveaxis(tensor, mode, 0), shape=(tensor.shape[mode], -1), order='F')
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
 def khatri_rao(A: Float[Array, 'm k'], B: Float[Array, 'n k']) -> Float[Array, 'm*n k']:
-    ''' khatri-rao product of two matrices '''
+    '''Khatri-Rao product of two matrices.'''
     (m, k), (n, _) = A.shape, B.shape
     return (A[:, None, :] * B[None, :, :]).reshape(m*n, k)
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
 def reconstruct(W: W_dtype, V: V_dtype, H: H_dtype, weights: Float[Array, 'r']) -> J_dtype:
-    ''' reconstruct full tensor from factors '''
+    '''Reconstruct full 3d tensor from factors and weights.'''
 
     def forloop(r, tensor):
         weight = weights[r]
@@ -42,7 +42,7 @@ def reconstruct(W: W_dtype, V: V_dtype, H: H_dtype, weights: Float[Array, 'r']) 
 @jax.jit
 @jaxtyped(typechecker=beartype)
 def lstsq(X: Array, Y: Array) -> Tuple[Array, Float[Array, '']]:
-    ''' wrapper around jnp.linalg.lsqtsq, returns solution and rcond '''
+    '''Wrapper around `jnp.linalg.lstsq`, returns solution and rcond.'''
     solution, _, _, svalues = jnp.linalg.lstsq(X, Y)
     rcond = svalues[-1] / svalues[0]
     return solution.T, rcond
@@ -73,5 +73,5 @@ def normalize_columns_V(W: W_dtype, V: V_dtype) -> Tuple[W_dtype, V_dtype]:
 @jax.jit(static_argnames='n')
 @jaxtyped(typechecker=beartype)
 def second_difference_matrix(n: int) -> Array:
-    ''' return second-order finite difference matrix for computing P-splines coefs '''
+    '''Second-order finite difference matrix for computing P-spline coefs.'''
     return jnp.diff(jnp.diff(jnp.eye(n), axis=0), axis=0)
