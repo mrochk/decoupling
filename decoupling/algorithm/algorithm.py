@@ -1,3 +1,4 @@
+import logging
 import warnings
 from tqdm import tqdm
 import jax, jax.numpy as jnp
@@ -79,7 +80,7 @@ class Algorithm:
 
         if self.splines_dof is None:
             self.splines_dof = max(self.splines_degree+1, int(jnp.sqrt(2*inputs.shape[0])))
-            warnings.warn(f'splines_dof not provided, setting it to {self.splines_dof}')
+            logging.info(f'splines_dof not provided, setting it to {self.splines_dof}')
 
         # convert to jax arrays and unfold jacobians
         inputs, outputs, jacobians = self._convert_inputs(inputs, outputs, jacobians)
