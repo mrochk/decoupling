@@ -19,6 +19,18 @@ Homepage = "https://github.com/mrochk/decoupling"
 Repository = "https://github.com/mrochk/decoupling"
 Issues = "https://github.com/mrochk/decoupling/issues"
 
+[project.optional-dependencies]
+examples = [
+    "ipywidgets>=8.1.9",
+    "matplotlib>=3.11.2",
+    "notebook>=7.6.2",
+    "seaborn>=0.13.2",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["decoupling*"]
