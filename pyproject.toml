@@ -15,9 +15,11 @@ dependencies = [
 
 [project.optional-dependencies]
 examples = [
+    "equinox>=0.13.8",
     "ipywidgets>=8.1.9",
     "matplotlib>=3.11.2",
     "notebook>=7.6.2",
+    "optax>=0.2.8",
     "seaborn>=0.13.2",
 ]
 
