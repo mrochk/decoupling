@@ -5,6 +5,7 @@ from beartype.typing import Callable, Tuple, Optional
 
 from decoupling.result import Decoupling
 from decoupling import _ops as ops
+from decoupling.samples import Samples
 from decoupling.types import *
 
 @jaxtyped(typechecker=beartype)
@@ -14,7 +15,7 @@ def collect_information_from_random(
     ninputs: int, 
     key: Array,
     minval: float = 0.0, maxval: float = 1.0,
-)-> Tuple[X_dtype, Y_dtype, J_dtype]:
+)-> Samples:
     ''' generate random samples and return inputs, outputs and jacobians '''
     assert callable(function)
     if ninputs is None: ninputs = find_ninputs(function)
@@ -22,16 +23,16 @@ def collect_information_from_random(
     function = jax.jit(jax.vmap(function))
     inputs = jax.random.uniform(key, shape=(N, ninputs), minval=minval, maxval=maxval)
     outputs, jacobians = function(inputs), jacobian(inputs)
-    return (inputs, outputs, jacobians.transpose((1, 2, 0)))
+    return Samples(inputs, outputs, jacobians.transpose((1, 2, 0)))
 
 @jaxtyped(typechecker=beartype)
-def collect_information_from_inputs(function: Callable, inputs: X_dtype)-> Tuple[X_dtype, Y_dtype, J_dtype]:
+def collect_information_from_inputs(function: Callable, inputs: X_dtype)-> Samples:
     '''Collect inputs, outputs and jacobians.'''
     assert callable(function)
     jacobian = jax.jit(jax.vmap(jax.jacobian(function)))
     function = jax.jit(jax.vmap(function))
     outputs, jacobians = function(inputs), jacobian(inputs)
-    return (inputs, outputs, jacobians.transpose((1, 2, 0)))
+    return Samples(inputs, outputs, jacobians.transpose((1, 2, 0)))
 
 @jaxtyped(typechecker=beartype)
 def cpd_reconstruct(factors: factors_dtype, weights: Optional[Float[Array, 'r']] = None) -> J_dtype:

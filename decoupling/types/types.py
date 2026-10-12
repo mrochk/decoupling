@@ -5,6 +5,10 @@ X_dtype = Float[ArrayLike, 'N m']
 Y_dtype = Float[ArrayLike, 'N n']
 J_dtype = Float[ArrayLike, 'n m N']
 
+inputs_dtype = X_dtype
+outputs_dtype = Y_dtype
+jacobians_dtype = J_dtype
+
 W_dtype = Float[Array, 'n r']
 V_dtype = Float[Array, 'm r']
 H_dtype = Float[Array, 'N r']

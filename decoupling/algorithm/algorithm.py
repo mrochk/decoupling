@@ -9,6 +9,7 @@ from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
 from decoupling.types import *
 from decoupling import _ops as ops
+from decoupling.samples import Samples
 from decoupling.utils import cpd_error
 from decoupling.result import Decoupling
 from decoupling._splines import design_matrices
@@ -75,8 +76,10 @@ class Algorithm:
         self.show_progress = show_progress
 
     @jaxtyped(typechecker=beartype)
-    def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
+    def run(self, samples: Samples) -> Decoupling:
         '''Compute the decoupled representation of target given inputs, outputs and Jacobians.'''
+
+        inputs, outputs, jacobians = tuple(samples)
 
         if self.splines_dof is None:
             self.splines_dof = max(self.splines_degree+1, int(jnp.sqrt(2*inputs.shape[0])))

@@ -20,8 +20,10 @@ def target(x):
 @pytest.fixture(scope="module")
 def data():
     key = jax.random.key(0)
-    X, Y, J = collect_information_from_random(target, N, 2, key)
-    return {"key": key, "X": X, "Y": Y, "J": J}
+    samples = collect_information_from_random(target, N, 2, key)
+    print(samples)
+    exit()
+    return {"key": key, "X": samples.inputs, "Y": samples.outputs, "J": samples.jacobians}
 
 @pytest.fixture(scope="module")
 def scaled(data):
