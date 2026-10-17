@@ -10,11 +10,9 @@ This library aims to be the reference implementation of tensor decoupling algori
 
 ```python
 import jax, jax.numpy as jnp
+
 from decoupling import Algorithm
-from decoupling.utils import (
-    function_error_from_callable,
-    collect_information_from_random,
-)
+from decoupling import utils
 
 def target(x): # define a simple polynomial
     return jnp.array([
@@ -26,12 +24,13 @@ key = jax.random.key(0)
 rank = 4 
 
 # collect information (inputs, outputs, jacobians)
-info = collect_information_from_random(target, N=100, key=key, ninputs=2)
+info = utils.collect_information_from_random(target, N=100, key=key, ninputs=2)
 
 decoupling = Algorithm(rank, key).run(*info) # compute decoupling
 
-e1, e2 = function_error_from_callable(target, decoupling, info[0])
+e1, e2 = utils.function_error_from_callable(target, decoupling, info[0])
 print(f'Errors: e1={e1:.2f}, e2={e2:.2f}') # compare to target
+# Errors: e1=1.20, e2=1.29 
 ```
 
 ### Installation
@@ -48,13 +47,13 @@ pip install decoupling
 
 ### Methodology
 
-Tensor decoupling algorithms are used to find a decoupled representation of a target multivariate function. This is illustrated below.
+Tensor decoupling algorithms are used to find decoupled representations of target multivariate functions. This is illustrated below.
 
 <p align="center">
 <img src="examples/images/decoupling.png" width=800>
 </p>
 
-In fact, this representation is a 2-layer MLP, meaning that tensor decoupling could be used to compress or build neural networks.
+This decoupled representation is a one-hidden-layer MLP, meaning that tensor decoupling approaches can be used to compress or build neural networks.
 
 You can read more about the basic methodology in this paper: https://arxiv.org/abs/1410.4060.
 
@@ -69,3 +68,8 @@ To learn more about how this library works, feel free to take a look at some [ex
 ```bash
 uv run python -m pytest -s # or ./test.sh
 ```
+
+### Context
+
+The development of this library was started in the context of my master's [thesis](https://zenodo.org/records/23432244).
+
