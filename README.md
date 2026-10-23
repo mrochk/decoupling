@@ -73,3 +73,15 @@ uv run python -m pytest -s # or ./test.sh
 
 The development of this library was started in the context of my master's [thesis](https://zenodo.org/records/23432244).
 
+### Citing `Decoupling`
+
+```
+@software{decoupling2026github,
+  author = {Maxime Rochkoulets},
+  title = {Decoupling: Fast tensor decoupling in JAX.},
+  url = {http://github.com/mrochk/decoupling},
+  version = {0.0.9},
+  year = {2026},
+}
+```
+
