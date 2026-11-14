@@ -10,9 +10,7 @@ This library aims to be the reference implementation of tensor decoupling algori
 
 ```python
 import jax, jax.numpy as jnp
-
-from decoupling import Algorithm
-from decoupling import utils
+from decoupling import Algorithm, utils
 
 def target(x): # define a simple polynomial
     return jnp.array([
@@ -24,9 +22,9 @@ key = jax.random.key(0)
 rank = 4 
 
 # collect information (inputs, outputs, jacobians)
-info = utils.collect_information_from_random(target, N=100, key=key, ninputs=2)
+samples = utils.collect_samples_from_random(key, target, ninputs=2, N=100)
 
-decoupling = Algorithm(rank, key).run(*info) # compute decoupling
+decoupling = Algorithm(rank, key).fit(samples) # compute decoupling
 
 e1, e2 = utils.function_error_from_callable(target, decoupling, info[0])
 print(f'Errors: e1={e1:.2f}, e2={e2:.2f}') # compare to target
@@ -84,4 +82,3 @@ The development of this library was started in the context of my master's [thesi
   year = {2026},
 }
 ```
-
