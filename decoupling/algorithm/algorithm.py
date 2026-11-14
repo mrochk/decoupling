@@ -12,6 +12,7 @@ from decoupling import _ops as ops
 from decoupling.utils import cpd_error
 from decoupling.result import Decoupling
 from decoupling._splines import design_matrices
+from decoupling.samples import Samples
 
 class Algorithm:
     '''Tensor decoupling algorithm class.'''
@@ -75,20 +76,19 @@ class Algorithm:
         self.show_progress = show_progress
 
     @jaxtyped(typechecker=beartype)
-    def run(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> Decoupling:
+    def fit(self, samples: Samples) -> Decoupling:
         '''Compute the decoupled representation of target given inputs, outputs and Jacobians.'''
+
+        inputs, outputs, jacobians = self._convert_inputs(*samples.unpack())
+        unfoldings = self._unfold_jacobians(jacobians)
 
         if self.splines_dof is None:
             self.splines_dof = max(self.splines_degree+1, int(jnp.sqrt(2*inputs.shape[0])))
             logging.info(f'splines_dof not provided, setting it to {self.splines_dof}')
 
-        # convert to jax arrays and unfold jacobians
-        inputs, outputs, jacobians = self._convert_inputs(inputs, outputs, jacobians)
-        unfoldings = self._unfold_jacobians(jacobians)
-
         result, min_error = None, float('inf')
         for i, key in enumerate(jax.random.split(self.key, self.ninits)):
-            factors, coefs_knots, info = self._run_once(i, key, inputs, outputs, jacobians, unfoldings)
+            factors, coefs_knots, info = self._fit_once(i, key, inputs, outputs, jacobians, unfoldings)
 
             if (error := min(info.errors)) >= min_error or jnp.isnan(error): continue
             if any(map(lambda x: x is None, coefs_knots[0])): continue
@@ -103,7 +103,7 @@ class Algorithm:
         return Decoupling(factors, coefs, knots, self.splines_degree)
 
     @jaxtyped(typechecker=beartype)
-    def _run_once(
+    def _fit_once(
         self, 
         seed: int, 
         key: Array, 
