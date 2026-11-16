@@ -3,16 +3,16 @@ import warnings
 from tqdm import tqdm
 import jax, jax.numpy as jnp
 from beartype import beartype
-from bsplx import repeat_knots
 from beartype.typing import Tuple, NamedTuple, Optional
 from jaxtyping import jaxtyped, Float, Array, ArrayLike
 
 from decoupling.types import *
-from decoupling import _ops as ops
-from decoupling.utils import cpd_error
-from decoupling.result import Decoupling
 from decoupling.samples import Samples
-from decoupling._splines import design_matrices
+from decoupling.result import Decoupling
+
+from decoupling import utils
+from decoupling import _ops as ops
+from decoupling import _splines as splines
 
 class Algorithm:
     '''Tensor decoupling algorithm class.'''
@@ -140,7 +140,7 @@ class Algorithm:
 
             H, R, (coefs, knots), log_lams = self._projection(H, R, inputs@V)
 
-            error = cpd_error(jacobians, (W, V, H))
+            error = utils.cpd_error(jacobians, (W, V, H))
             errors.append(error)
 
             if iteration == 0 or error < best_error:
@@ -176,14 +176,6 @@ class Algorithm:
         keys = jax.random.split(key, num=4)
         return tuple(jax.random.normal(key, shape=(d, self.rank)) for key, d in zip(keys, (n, m, N, N)))
 
-    @staticmethod
-    @jax.jit(static_argnames='rank')
-    @jaxtyped(typechecker=beartype)
-    def _project(rank: int, coefs: Array, B: Array, dB: Array, H: H_dtype, R: R_dtype) -> Tuple[H_dtype, R_dtype]:
-        H_new = H.at[:, rank].set(dB @ coefs)
-        R_new = R.at[:, rank].set(B @ coefs)
-        return (H_new, R_new)
-
     @jaxtyped(typechecker=beartype)
     def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r']) -> Tuple:
 
@@ -205,7 +197,7 @@ class Algorithm:
 
             knots = self._determine_knots(z)
 
-            B, dB = design_matrices(z, knots, self.splines_degree)
+            B, dB = splines.design_matrices(z, knots, self.splines_degree)
 
             A = jnp.vstack([dB, jnp.sqrt(self.gamma) * B])
             y = jnp.concatenate([h, jnp.sqrt(self.gamma) * r])
@@ -213,11 +205,11 @@ class Algorithm:
             if self.use_smoothing:
                 D = ops.second_difference_matrix(B.shape[1])
                 N_eff = (A.shape[0] / 2) * (1.0 + self.gamma)
-                (lam, coefs) = Algorithm._gcv_demmler_reinsch(A, y, D, self.smoothing_grid, jnp.asarray(N_eff))
+                (lam, coefs) = splines.gcv_demmler_reinsch(A, y, D, self.smoothing_grid, jnp.asarray(N_eff))
                 lambdas.append(lam)
             else: coefs = ops.lstsq(A, y)[0]
 
-            H, R = self._project(rank, coefs, B, dB, H, R)
+            H, R = splines.project(rank, coefs, B, dB, H, R)
 
             # return the coefs for fitting the internals later
             coefs_out.append(coefs)
@@ -225,54 +217,5 @@ class Algorithm:
 
         return H, R, (coefs_out, knots_out), lambdas
 
-    @staticmethod
-    @jax.jit
-    def _gcv_demmler_reinsch(A: Array, y: Array, D: Array, grid: Array, N: Array) -> Tuple[Array, Array]:
-        n, _ = A.shape
-
-        M = jnp.concatenate([A, D], axis=0) # invertible matrix that contains D
-
-        Qm, Rm = jnp.linalg.qr(M)
-        Um, s, Vmt = jnp.linalg.svd(Rm)
-
-        tol = jnp.finfo(A.dtype).eps * max(M.shape) * s[0]
-        keep = s > tol
-        inv_s = jnp.where(keep, 1.0 / jnp.where(keep, s, 1.0), 0.0)
-
-        X = Qm[:n] @ jnp.where(keep[None, :], Um, 0.0)
-
-        Qx, Rx = jnp.linalg.qr(X)
-        Ux, c, Wt = jnp.linalg.svd(Rx)
-
-        f = Ux.T @ (Qx.T @ y)
-        r0 = y - Qx @ (Ux @ f)
-        rss0 = r0 @ r0
-
-        c2 = jnp.clip(c * c, 0.0, 1.0)
-        d2 = 1.0 - c2
-
-        lam = grid[:, None]
-        denom = c2 + lam * d2
-        rss = rss0 + jnp.sum((f * (lam * d2) / denom) ** 2, axis=1)
-        dof = jnp.sum(c2 / denom, axis=1)
-
-        scores = (rss / N) / (1.0 - dof / N) ** 2
-        scores = jnp.where(jnp.isfinite(scores) & (dof < N), scores, jnp.inf)
-
-        best = jnp.argmin(scores)
-        lam = grid[best]
-
-        a = c * f / denom[best]
-        coefs = (Vmt.T * inv_s) @ (Wt.T @ a)
-
-        return (lam, coefs)
-
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
-        return Algorithm._determine_knots_jit(z, self.splines_dof, self.splines_degree)
-
-    @staticmethod
-    @jax.jit(static_argnames=('dof', 'degree'))
-    def _determine_knots_jit(z, dof: int, degree: int) -> Array:
-        internals = dof - degree + 1
-        qs = jnp.linspace(0, 1, internals)
-        return repeat_knots(jnp.quantile(z, qs), degree)
+        return splines.determine_knots(z, self.splines_dof, self.splines_degree)
