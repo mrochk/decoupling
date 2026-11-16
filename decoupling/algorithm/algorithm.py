@@ -108,7 +108,7 @@ class Algorithm:
         unfoldings: Tuple[Array, Array, Array],
     ) -> Tuple[factors_dtype, Tuple, Information]:
 
-        J0, J1, J2 = unfoldings
+        (J0, J1, J2) = unfoldings
 
         errors = []
 

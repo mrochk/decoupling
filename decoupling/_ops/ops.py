@@ -42,7 +42,7 @@ def reconstruct(W: W_dtype, V: V_dtype, H: H_dtype, weights: Float[Array, 'r']) 
 @jax.jit
 @jaxtyped(typechecker=beartype)
 def lstsq(X: Array, Y: Array) -> Tuple[Array, Float[Array, '']]:
-    '''Wrapper around `jnp.linalg.lstsq`, returns solution and rcond.'''
+    '''Wrapper around `jnp.linalg.lstsq`, returns solution for X@W = Y, and rcond.'''
     solution, _, _, svalues = jnp.linalg.lstsq(X, Y)
     rcond = svalues[-1] / svalues[0]
     return solution.T, rcond
@@ -50,6 +50,7 @@ def lstsq(X: Array, Y: Array) -> Tuple[Array, Float[Array, '']]:
 @jax.jit
 @jaxtyped(typechecker=beartype)
 def cmtf_lstsq(X1, X2, Y1, Y2, gamma: Float[Array, '']) -> Tuple[Array, Float[Array, '']]:
+    '''Returns solution for [X1 | sqrt(gamma)*X2] @ W = [Y1 | sqrt(gamma)*Y2] and rcond.'''
     gamma = jnp.sqrt(gamma)
     X = jnp.concatenate([X1, gamma*X2], axis=0)
     Y = jnp.concatenate([Y1, gamma*Y2], axis=0)
@@ -58,6 +59,7 @@ def cmtf_lstsq(X1, X2, Y1, Y2, gamma: Float[Array, '']) -> Tuple[Array, Float[Ar
 @jax.jit
 @jaxtyped(typechecker=beartype)
 def normalize_columns_V(W: W_dtype, V: V_dtype) -> Tuple[W_dtype, V_dtype]:
+    '''Normalize the columns of factor V by transferring weights to W.'''
     rank = W.shape[1]
 
     def _(i, W_V):
@@ -73,5 +75,5 @@ def normalize_columns_V(W: W_dtype, V: V_dtype) -> Tuple[W_dtype, V_dtype]:
 @jax.jit(static_argnames='n')
 @jaxtyped(typechecker=beartype)
 def second_difference_matrix(n: int) -> Array:
-    '''Second-order finite difference matrix for computing P-spline coefs.'''
+    '''Second-order finite difference matrix.'''
     return jnp.diff(jnp.diff(jnp.eye(n), axis=0), axis=0)
