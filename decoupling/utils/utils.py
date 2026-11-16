@@ -1,7 +1,7 @@
 import jax, jax.numpy as jnp
 from beartype import beartype
 from jaxtyping import jaxtyped, Float, Array
-from beartype.typing import Callable, Optional
+from beartype.typing import Callable, Optional, Tuple
 
 from decoupling.result import Decoupling
 from decoupling import _ops as ops
@@ -32,14 +32,14 @@ def collect_samples_from_random(
     return collect_samples(function, inputs)
 
 @jaxtyped(typechecker=beartype)
-def cpd_reconstruct(factors: factors_dtype, weights: Optional[Float[Array, 'r']] = None) -> J_dtype:
+def cpd_reconstruct(factors: Tuple, weights: Optional[Float[Array, 'r']] = None) -> J_dtype:
     '''Calls jit-compiled `ops.reconstruct`.'''
     rank = factors[0].shape[1]
     if weights is None: weights = jnp.ones(rank)
     return ops.reconstruct(*factors, weights)
 
 @jaxtyped(typechecker=beartype)
-def cpd_error(tensor: J_dtype, factors: factors_dtype, weights: Optional[Float[Array, 'r']] = None) -> Float[Array, '']:
+def cpd_error(tensor: J_dtype, factors: Tuple, weights: Optional[Float[Array, 'r']] = None) -> Float[Array, '']:
     '''Compute the cpd-error from target tensor, factors and weights.'''
     _tensor = cpd_reconstruct(factors, weights)
     return jnp.linalg.norm(tensor - _tensor) / jnp.linalg.norm(tensor)

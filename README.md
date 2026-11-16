@@ -26,7 +26,7 @@ samples = utils.collect_samples_from_random(key, target, ninputs=2, N=100)
 
 decoupling = Algorithm(rank, key).fit(samples) # compute decoupling
 
-e1, e2 = utils.function_error_from_callable(target, decoupling, info[0])
+e1, e2 = utils.function_error_from_callable(target, decoupling, samples.inputs)
 print(f'Errors: e1={e1:.2f}, e2={e2:.2f}') # compare to target
 # Errors: e1=1.20, e2=1.29 
 ```

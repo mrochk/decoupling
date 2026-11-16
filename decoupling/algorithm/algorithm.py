@@ -168,13 +168,13 @@ class Algorithm:
     @staticmethod
     @jaxtyped(typechecker=beartype)
     def _unfold_jacobians(jacobians: J_dtype) -> Tuple[Array, Array, Array]:
-        return (ops.unfold_kolda(jacobians, k).T for k in range(3))
+        return tuple(ops.unfold_kolda(jacobians, k).T for k in range(3))
 
     @jaxtyped(typechecker=beartype)
     def _initialize_factors(self, jacobians: J_dtype, key: Array) -> factors_dtype:
         n, m, N = jacobians.shape
         keys = jax.random.split(key, num=4)
-        return (jax.random.normal(key, shape=(d, self.rank)) for key, d in zip(keys, (n, m, N, N)))
+        return tuple(jax.random.normal(key, shape=(d, self.rank)) for key, d in zip(keys, (n, m, N, N)))
 
     @staticmethod
     @jax.jit(static_argnames='rank')
