@@ -1,5 +1,5 @@
 from jaxtyping import Float, Array, ArrayLike
-from beartype.typing import Union, Tuple
+from beartype.typing import Tuple
 
 X_dtype = Float[ArrayLike, 'N m']
 Y_dtype = Float[ArrayLike, 'N n']
@@ -10,7 +10,5 @@ V_dtype = Float[Array, 'm r']
 H_dtype = Float[Array, 'N r']
 R_dtype = Float[Array, 'N r']
 
-factors_dtype = Union[
-    Tuple[W_dtype, V_dtype, H_dtype],
-    Tuple[W_dtype, V_dtype, H_dtype, R_dtype],
-]
+inputs_dtype = Tuple[X_dtype, Y_dtype, J_dtype]
+factors_dtype = Tuple[W_dtype, V_dtype, H_dtype, R_dtype]

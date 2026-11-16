@@ -11,8 +11,8 @@ from decoupling.types import *
 from decoupling import _ops as ops
 from decoupling.utils import cpd_error
 from decoupling.result import Decoupling
-from decoupling._splines import design_matrices
 from decoupling.samples import Samples
+from decoupling._splines import design_matrices
 
 class Algorithm:
     '''Tensor decoupling algorithm class.'''
@@ -35,7 +35,6 @@ class Algorithm:
         gamma: float = 0.1,
         splines_dof: Optional[int] = None,
         splines_degree: int = 3,
-        knots_blend: float = 1.0,
         use_smoothing: bool = True,
         smoothing_grid: ArrayLike = jnp.linspace(0.0, 1000.0, num=512),
         show_progress: bool = True,
@@ -49,9 +48,8 @@ class Algorithm:
             gamma (float): weight of zeroth-order information in cmtf objective 
             splines_dof (int): splines degrees of freedom (default=sqrt{2N}) 
             splines_degree (int): splines degree (default=3) 
-            knots_blend (float): controls the quantile/uniform knots interpolation where 1 = pure quantile knots and 0 = evenly spaced knots
-            use_smoothing (bool): whether to use P-splines or B-splines 
-            smoothing_grid (ArrayLike): the grid of lambda values to search for 
+            use_smoothing (bool): whether to use P-splines (true) or B-splines (false) 
+            smoothing_grid (ArrayLike): the grid of lambda  values to search for 
             show_progress (bool): whether to show the progress bar 
         '''
 
@@ -61,8 +59,6 @@ class Algorithm:
         if splines_dof is not None and splines_dof < splines_degree + 1:
             raise ValueError(f'dof ({splines_dof}) must be >= degree + 1 ({splines_degree + 1})')
 
-        assert 0.0 <= knots_blend <= 1.0
-
         self.rank = rank
         self.niters = niters
         self.ninits = ninits 
@@ -70,7 +66,6 @@ class Algorithm:
         self.gamma = jnp.asarray(gamma)
         self.splines_dof = splines_dof
         self.splines_degree = splines_degree
-        self.knots_blend = knots_blend
         self.use_smoothing = use_smoothing
         self.smoothing_grid = ops.convert_array(smoothing_grid)
         self.show_progress = show_progress
@@ -167,35 +162,27 @@ class Algorithm:
         return (factors, coefs_knots, info)
 
     @jaxtyped(typechecker=beartype)
-    def _convert_inputs(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype,
-    ) -> Tuple[X_dtype, Y_dtype, J_dtype]:
-        return (ops.convert_array(inputs), ops.convert_array(outputs), ops.convert_array(jacobians))
+    def _convert_inputs(self, inputs: X_dtype, outputs: Y_dtype, jacobians: J_dtype) -> inputs_dtype:
+        return tuple(map(ops.convert_array, (inputs, outputs, jacobians)))
 
     @staticmethod
     @jaxtyped(typechecker=beartype)
     def _unfold_jacobians(jacobians: J_dtype) -> Tuple[Array, Array, Array]:
-        J0 = ops.unfold_kolda(jacobians, 0).T
-        J1 = ops.unfold_kolda(jacobians, 1).T
-        J2 = ops.unfold_kolda(jacobians, 2).T
-        return (J0, J1, J2)
+        return (ops.unfold_kolda(jacobians, k).T for k in range(3))
 
     @jaxtyped(typechecker=beartype)
     def _initialize_factors(self, jacobians: J_dtype, key: Array) -> factors_dtype:
         n, m, N = jacobians.shape
         keys = jax.random.split(key, num=4)
-        W = jax.random.normal(keys[0], shape=(n, self.rank))
-        V = jax.random.normal(keys[1], shape=(m, self.rank))
-        H = jax.random.normal(keys[2], shape=(N, self.rank))
-        R = jax.random.normal(keys[3], shape=(N, self.rank))
-        return (W, V, H, R)
+        return (jax.random.normal(key, shape=(d, self.rank)) for key, d in zip(keys, (n, m, N, N)))
 
     @staticmethod
     @jax.jit(static_argnames='rank')
     @jaxtyped(typechecker=beartype)
     def _project(rank: int, coefs: Array, B: Array, dB: Array, H: H_dtype, R: R_dtype) -> Tuple[H_dtype, R_dtype]:
-        H = H.at[:, rank].set(dB @ coefs)
-        R = R.at[:, rank].set(B @ coefs)
-        return (H, R)
+        H_new = H.at[:, rank].set(dB @ coefs)
+        R_new = R.at[:, rank].set(B @ coefs)
+        return (H_new, R_new)
 
     @jaxtyped(typechecker=beartype)
     def _projection(self, H: H_dtype, R: R_dtype, Z: Float[Array, 'N r']) -> Tuple:
@@ -226,8 +213,7 @@ class Algorithm:
             if self.use_smoothing:
                 D = ops.second_difference_matrix(B.shape[1])
                 N_eff = (A.shape[0] / 2) * (1.0 + self.gamma)
-                (lam, coefs) = Algorithm._gcv_demmler_reinsch(
-                    A, y, D, self.smoothing_grid, jnp.asarray(N_eff))
+                (lam, coefs) = Algorithm._gcv_demmler_reinsch(A, y, D, self.smoothing_grid, jnp.asarray(N_eff))
                 lambdas.append(lam)
             else: coefs = ops.lstsq(A, y)[0]
 
@@ -241,7 +227,7 @@ class Algorithm:
 
     @staticmethod
     @jax.jit
-    def _gcv_demmler_reinsch(A: Array, y: Array, D: Array, grid: Array, N: Array):
+    def _gcv_demmler_reinsch(A: Array, y: Array, D: Array, grid: Array, N: Array) -> Tuple[Array, Array]:
         n, _ = A.shape
 
         M = jnp.concatenate([A, D], axis=0) # invertible matrix that contains D
@@ -282,16 +268,11 @@ class Algorithm:
         return (lam, coefs)
 
     def _determine_knots(self, z: Float[Array, 'r']) -> Array:
-        return Algorithm._determine_knots_jit(z, self.splines_dof, self.splines_degree, self.knots_blend)
+        return Algorithm._determine_knots_jit(z, self.splines_dof, self.splines_degree)
 
     @staticmethod
     @jax.jit(static_argnames=('dof', 'degree'))
-    def _determine_knots_jit(z, dof: int, degree: int, blend: float) -> Array:
+    def _determine_knots_jit(z, dof: int, degree: int) -> Array:
         internals = dof - degree + 1
         qs = jnp.linspace(0, 1, internals)
-
-        knots_q = jnp.quantile(z, qs)
-        knots_u = jnp.linspace(jnp.min(z), jnp.max(z), internals)
-
-        knots = blend * knots_q + (1.0 - blend) * knots_u
-        return repeat_knots(knots, degree)
+        return repeat_knots(jnp.quantile(z, qs), degree)
